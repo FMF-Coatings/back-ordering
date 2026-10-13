@@ -489,8 +489,13 @@
   function stage(o, l, change) {
     try {
       const p = pending.get(l.id) || { status: l.status, note: l.status_note || '' };
-      if (change.status !== undefined) p.status = change.status;
-      if (change.note !== undefined) p.note = RULES.statusNote(change.note) || '';
+      if (change.status !== undefined) {
+        p.status = change.status;
+        // an ordering note only exists while the line is ORDERED: leaving ORDERED clears it, returning restores the saved one
+        if (p.status !== 'ORDERED') p.note = '';
+        else if (!p.note) p.note = l.status_note || '';
+      }
+      if (change.note !== undefined && p.status === 'ORDERED') p.note = RULES.statusNote(change.note) || '';
       p.baseStatus = l.status; p.baseNote = l.status_note || '';
       p.label = o.account + ' / ' + o.order_ref + ' / ' + l.part_number;
       if (p.status === p.baseStatus && p.note === p.baseNote) pending.delete(l.id); else pending.set(l.id, p);
@@ -647,11 +652,11 @@
           const sel = el('select', { onchange: (e) => stage(o, l, { status: e.target.value }) },
             ['TO BE ORDERED', 'ORDERED', 'COMPLETED'].map((s) => el('option', { value: s, textContent: s, selected: s === curStatus })));
           const noteIn = el('input', { value: curNote, type: 'text', placeholder: 'Ordering note, e.g. OOS at supplier', maxLength: 200, title: 'Ordering note (saved with the status)', onchange: (e) => stage(o, l, { note: e.target.value }) });
-          tr.append(el('td', { className: 'statuscell' }, sel, noteIn));
+          tr.append(el('td', { className: 'statuscell' }, sel, curStatus === 'ORDERED' ? noteIn : []));
           if (p) tr.classList.add('pending');
         } else {
           const st = el('td', {}, el('span', { className: 'badge ' + BADGE[l.status], textContent: l.status }));
-          if (l.status_note) st.append(el('div', { className: 'status-note', textContent: l.status_note }));
+          if (l.status_note && l.status === 'ORDERED') st.append(el('div', { className: 'status-note', textContent: l.status_note }));
           if (archived) st.append(el('div', { className: 'small muted', textContent: 'Exported ' + fmtDate(l.archived_at) }));
           tr.append(st);
         }

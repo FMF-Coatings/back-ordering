@@ -261,14 +261,13 @@
 <!-- STAGED STATUS CHANGES: shown when a Manager clicks the lock with unsaved changes -->
 <div class="modal-backdrop" id="pendingModal">
   <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="pcTitle">
-    <div class="modal-head"><div class="modal-title" id="pcTitle">Save status changes?</div></div>
+    <div class="modal-head"><div class="modal-title" id="pcTitle">Save changes?</div></div>
     <div class="hint" id="pcIntro"></div>
     <ul class="pc-list" id="pcList"></ul>
     <div class="err-text" id="pcErr" role="status"></div>
     <div class="modal-actions">
-      <button class="secondary" id="pcKeep" type="button">Keep editing</button>
-      <button class="secondary danger" id="pcDiscard" type="button">Discard and lock</button>
-      <button class="primary" id="pcSave" type="button" style="padding:12px 24px">Save and lock</button>
+      <button class="secondary danger" id="pcDiscard" type="button">Cancel changes</button>
+      <button class="primary" id="pcSave" type="button" style="padding:12px 24px">Save changes</button>
     </div>
   </div>
 </div>
@@ -299,10 +298,12 @@
     if (!window.supabase) $('setupView').insertAdjacentText('beforeend', 'The Supabase library failed to load. Check your internet connection.');
     return;
   }
-  // persistSession:false: the login lives only in this tab's memory, so closing or refreshing signs out.
-  // A shared PC is never left signed in.
+  // The login is kept in sessionStorage: it survives a refresh (F5) but is wiped when the tab or browser is
+  // closed, so a shared PC is never left signed in. If the browser blocks storage, it falls back to memory only.
+  let authStorage;
+  try { window.sessionStorage.setItem('_t', '1'); window.sessionStorage.removeItem('_t'); authStorage = window.sessionStorage; } catch (e) { authStorage = undefined; }
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+    auth: { persistSession: !!authStorage, storage: authStorage, autoRefreshToken: true, detectSessionInUrl: false },
   });
 
   let profile = null;      // { id, display_name, role }
@@ -535,8 +536,10 @@
   }
   const closePendingModal = () => $('pendingModal').classList.remove('open');
   const finishLock = () => { editing = false; renderMode(); };
-  $('pcKeep').onclick = closePendingModal;
-  $('pcDiscard').onclick = () => { pending.clear(); closePendingModal(); finishLock(); toast('Changes discarded'); };
+  // clicking outside the box or pressing Escape just closes it and keeps the changes pending (nothing is lost)
+  $('pendingModal').addEventListener('click', (e) => { if (e.target === $('pendingModal')) closePendingModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePendingModal(); });
+  $('pcDiscard').onclick = () => { pending.clear(); closePendingModal(); finishLock(); toast('Changes cancelled'); };
   $('pcSave').onclick = async () => {
     $('pcSave').disabled = true;
     const { done, failed } = await commitPending();
@@ -677,7 +680,7 @@
     [...body.children].forEach((tr) => { tr.lastChild.hidden = !anyAction; });
     const np = pending.size;
     $('pendingBar').hidden = !np;
-    $('pendingBar').textContent = np ? np + ' unsaved status change' + (np === 1 ? '' : 's') + '. Nothing is saved until you click the EDIT VIEW lock to confirm.' : '';
+    $('pendingBar').textContent = np ? np + ' unsaved status change' + (np === 1 ? '' : 's') + '. Click the EDIT VIEW lock to save or cancel them.' : '';
     $('exportBtn').hidden = !(editing && isEditor());
     $('usersBtn').hidden = !(editing && isEditor());
     $('purgeBtn').hidden = !(editing && isEditor() && f === 'archived');

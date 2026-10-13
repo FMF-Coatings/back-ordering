@@ -58,6 +58,7 @@
   table.um td, table.um th { position: static; box-shadow: none; }
   .um-wrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: 12px; }
 
+  th.sortable { cursor: pointer; user-select: none; } th.sortable:hover { background: #e9f0f9; } #sortArrow { font-size: 0.7rem; margin-left: 2px; }
   .caps { text-transform: uppercase; } .caps::placeholder { text-transform: none; }
   tr.pending td { background: #fff8e6 !important; }
   tr.pending td:first-child { box-shadow: inset 4px 0 0 #f5b041; }
@@ -211,10 +212,10 @@
       <div class="card-label">Back order lines</div>
       <div class="toolbar">
         <select id="statusFilter" title="Which lines to show">
-          <option value="open">Open lines (to be ordered / ordered)</option>
+          <option value="open">Open lines</option>
           <option value="completed">Completed lines</option>
           <option value="all">All lines</option>
-          <option value="archived" id="optArchived" hidden disabled>Archived (exported, awaiting purge)</option>
+          <option value="archived" id="optArchived" hidden disabled>Archived lines</option>
         </select>
         <input id="search" placeholder="Search account, order ref, part, notes…" style="flex:1;min-width:200px">
         <span class="muted" id="count"></span>
@@ -226,7 +227,7 @@
           <th>Account</th><th>Order ref</th><th>Part no</th><th>Description</th>
           <th class="num">Qty</th><th class="num">Unit cost £</th><th class="num">Unit price £</th>
           <th>Notes</th>
-          <th>Status</th><th>Raised by</th><th>Raised</th><th id="actHead" hidden></th>
+          <th>Status</th><th>Raised by</th><th id="thRaised" class="sortable" tabindex="0" role="columnheader" aria-sort="descending" title="Click to sort by raised date">Raised <span id="sortArrow" aria-hidden="true">▼</span></th><th id="actHead" hidden></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table></div>
@@ -368,7 +369,7 @@
     await enter(data.user);
   }
   function showLogin() {
-    profile = null; editing = false; orders = []; pending.clear(); $('pendingModal').classList.remove('open');
+    profile = null; editing = false; orders = []; pending.clear(); sortDir = 'desc'; $('sortArrow').textContent = '\u25BC'; $('thRaised').setAttribute('aria-sort', 'descending'); $('pendingModal').classList.remove('open');
     $('rows').innerHTML = '';                      // don't leave order data in the page after sign-out
     clearTimeout(idleTimer);
     closeUsers();
@@ -574,12 +575,25 @@
       else if (f === 'completed') q = q.eq('product_lines.status', 'COMPLETED').is('product_lines.archived_at', null);
       else if (f === 'archived') q = q.not('product_lines.archived_at', 'is', null);
       else q = q.is('product_lines.archived_at', null);                      // "all" never includes archived lines
-      const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+      const asc = sortDir === 'asc';
+      const { data, error } = await q.order('created_at', { ascending: asc }).order('id', { ascending: asc }).limit(500);
       if (error) throw fail(error);
       orders = data || [];
       render();
     } catch (e) { toast(e.message, true); }
   }
+  // Sort by the Raised date. Newest first by default; click the header to flip. The database does the sorting
+  // (not the browser) so that, with more than 500 back orders, "oldest first" really starts at the oldest.
+  let sortDir = 'desc';
+  function toggleSort() {
+    sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+    $('sortArrow').textContent = sortDir === 'desc' ? '\u25BC' : '\u25B2';
+    $('thRaised').setAttribute('aria-sort', sortDir === 'desc' ? 'descending' : 'ascending');
+    $('thRaised').title = sortDir === 'desc' ? 'Newest first. Click for oldest first' : 'Oldest first. Click for newest first';
+    load();
+  }
+  $('thRaised').onclick = toggleSort;
+  $('thRaised').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(); } };
   $('statusFilter').onchange = load;
   $('search').oninput = render;
 

@@ -58,6 +58,16 @@
   table.um td, table.um th { position: static; box-shadow: none; }
   .um-wrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: 12px; }
 
+  tr.pending td { background: #fff8e6 !important; }
+  tr.pending td:first-child { box-shadow: inset 4px 0 0 #f5b041; }
+  .pending-bar { background: #fff3d6; border: 1.5px solid #f5b041; color: #5e4300; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-weight: 600; font-size: 0.92rem; }
+  .status-note { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; overflow-wrap: anywhere; max-width: 260px; }
+  td.statuscell input { margin-top: 4px; min-width: 170px; }
+  .pc-list { list-style: none; margin: 8px 0 16px; } .pc-list li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.92rem; overflow-wrap: anywhere; }
+  .pc-list li:last-child { border-bottom: none; } .pc-list .was { color: var(--text-muted); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+  .modal.narrow { max-width: 620px; }
+
   main { padding: 24px 20px 48px; width: 100%; }
 
   /* cards and forms */
@@ -209,6 +219,7 @@
         <span class="muted" id="count"></span>
         <button id="purgeBtn" class="secondary danger" hidden>Purge all archived lines…</button>
       </div>
+      <div class="pending-bar" id="pendingBar" hidden></div>
       <div class="tablewrap"><table>
         <thead><tr>
           <th>Account</th><th>Order ref</th><th>Part no</th><th>Description</th>
@@ -244,6 +255,21 @@
       <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Last sign-in</th><th></th></tr></thead>
       <tbody id="umRows"></tbody>
     </table></div>
+  </div>
+</div>
+
+<!-- STAGED STATUS CHANGES: shown when a Manager clicks the lock with unsaved changes -->
+<div class="modal-backdrop" id="pendingModal">
+  <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="pcTitle">
+    <div class="modal-head"><div class="modal-title" id="pcTitle">Save status changes?</div></div>
+    <div class="hint" id="pcIntro"></div>
+    <ul class="pc-list" id="pcList"></ul>
+    <div class="err-text" id="pcErr" role="status"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="pcKeep" type="button">Keep editing</button>
+      <button class="secondary danger" id="pcDiscard" type="button">Discard and lock</button>
+      <button class="primary" id="pcSave" type="button" style="padding:12px 24px">Save and lock</button>
+    </div>
   </div>
 </div>
 
@@ -340,7 +366,7 @@
     await enter(data.user);
   }
   function showLogin() {
-    profile = null; editing = false; orders = [];
+    profile = null; editing = false; orders = []; pending.clear(); $('pendingModal').classList.remove('open');
     $('rows').innerHTML = '';                      // don't leave order data in the page after sign-out
     clearTimeout(idleTimer);
     closeUsers();
@@ -376,7 +402,10 @@
     if (!editing) closeUsers();
     render();
   }
-  $('modeBtn').onclick = () => { if (!isEditor()) return; editing = !editing; renderMode(); toast(editing ? 'Edit view on' : 'Edit view off'); };
+  $('modeBtn').onclick = () => {
+    if (!isEditor()) return;
+    if (editing && pending.size) { openPendingModal(); return; }      // unsaved status changes: confirm first
+    editing = !editing; renderMode(); toast(editing ? 'Edit view on' : 'Edit view off'); };
 
   // ---------- Validation (mirrors the database rules; the database is the final check) ----------
   const text = (label, max, required) => (v) => {
@@ -408,6 +437,7 @@
     unitCost: money('Unit cost'),
     unitPrice: money('Unit price'),
     notes: text('Line notes', 1000, false),
+    statusNote: text('Ordering note', 200, false),
   };
   function parseLine(raw) {
     return {
@@ -451,6 +481,69 @@
     } catch (e) { $('newErr').textContent = e.message; }
     btn.disabled = false;
   };
+
+  // ---------- Staged status changes (Managers) ----------
+  // A status or ordering-note change is only STAGED when picked. It is saved when the Manager clicks the
+  // EDIT VIEW lock again and confirms. This stops a mis-click changing a line straight away.
+  const pending = new Map();      // lineId -> { status, note, baseStatus, baseNote, label }
+  function stage(o, l, change) {
+    try {
+      const p = pending.get(l.id) || { status: l.status, note: l.status_note || '' };
+      if (change.status !== undefined) p.status = change.status;
+      if (change.note !== undefined) p.note = RULES.statusNote(change.note) || '';
+      p.baseStatus = l.status; p.baseNote = l.status_note || '';
+      p.label = o.account + ' / ' + o.order_ref + ' / ' + l.part_number;
+      if (p.status === p.baseStatus && p.note === p.baseNote) pending.delete(l.id); else pending.set(l.id, p);
+    } catch (e) { toast(e.message, true); }
+    render();
+  }
+  // Save every staged change. A status change is only applied if the line still has the status it had when
+  // staged, so it can never silently overwrite a change another Manager just made.
+  async function commitPending() {
+    const failed = []; let done = 0;
+    for (const [id, p] of [...pending]) {
+      const patch = {};
+      if (p.status !== p.baseStatus) patch.status = p.status;
+      if (p.note !== p.baseNote) patch.status_note = p.note || null;
+      try {
+        let q = sb.from('product_lines').update(patch).eq('id', id).is('archived_at', null);
+        if (patch.status) q = q.eq('status', p.baseStatus);
+        const { data, error } = await q.select('id');
+        if (error) throw fail(error);
+        if (!data || !data.length) throw new Error('changed by someone else, or no longer exists');
+        pending.delete(id); done++;
+      } catch (e) { failed.push(p.label + ': ' + e.message); }
+    }
+    return { done, failed };
+  }
+  function openPendingModal() {
+    const list = $('pcList'); list.textContent = ''; $('pcErr').textContent = '';
+    const n = pending.size;
+    $('pcIntro').textContent = n + ' change' + (n === 1 ? '' : 's') + ' waiting. Check them, then save.';
+    for (const p of pending.values()) {
+      const li = el('li', {}, el('strong', { textContent: p.label }), el('br'));
+      if (p.status !== p.baseStatus) li.append(el('span', { className: 'was', textContent: p.baseStatus + ' \u2192 ' }), el('strong', { textContent: p.status }));
+      if (p.note !== p.baseNote) li.append(p.status !== p.baseStatus ? ' \u00b7 ' : '', 'Ordering note: ', el('em', { textContent: p.note ? '\u201c' + p.note + '\u201d' : '(cleared)' }));
+      list.append(li);
+    }
+    $('pendingModal').classList.add('open');
+  }
+  const closePendingModal = () => $('pendingModal').classList.remove('open');
+  const finishLock = () => { editing = false; renderMode(); };
+  $('pcKeep').onclick = closePendingModal;
+  $('pcDiscard').onclick = () => { pending.clear(); closePendingModal(); finishLock(); toast('Changes discarded'); };
+  $('pcSave').onclick = async () => {
+    $('pcSave').disabled = true;
+    const { done, failed } = await commitPending();
+    $('pcSave').disabled = false;
+    if (failed.length) {
+      $('pcErr').textContent = 'Not saved: ' + failed.join(' | ') + '. The others were saved.';
+      if (done) load(); else render();
+      return;
+    }
+    closePendingModal(); finishLock(); toast('Saved ' + done + ' change' + (done === 1 ? '' : 's')); load();
+  };
+  window.addEventListener('beforeunload', (e) => { if (pending.size) { e.preventDefault(); e.returnValue = ''; } });
 
   // ---------- Table ----------
   async function load() {
@@ -498,7 +591,7 @@
       const { data, error } = await sb.from('product_lines').delete().eq('id', id).select('id');
       if (error) throw fail(error);
       if (!data || !data.length) throw new Error('Nothing was deleted. Only the person who raised a line can delete it, and only while it is TO BE ORDERED.');
-      toast('Deleted'); load();
+      pending.delete(id); toast('Deleted'); load();
     } catch (e) { toast(e.message, true); }
   }
 
@@ -514,7 +607,7 @@
     let n = 0, anyAction = false;
     for (const o of orders) {
       const lines = [...(o.product_lines || [])].sort(lineSort).filter((l) =>
-        !q || [o.account, o.order_ref, o.notes, l.part_number, l.description, l.notes].join(' ').toLowerCase().includes(q));
+        !q || [o.account, o.order_ref, o.notes, l.part_number, l.description, l.notes, l.status_note].join(' ').toLowerCase().includes(q));
       lines.forEach((l, idx) => {
         n++;
         const archived = !!l.archived_at;
@@ -549,11 +642,16 @@
         tr.append(notes);
 
         if (edit) {
-          const sel = el('select', { onchange: (e) => patchLine(l.id, 'status', e.target.value) },
-            ['TO BE ORDERED', 'ORDERED', 'COMPLETED'].map((s) => el('option', { value: s, textContent: s, selected: s === l.status })));
-          tr.append(el('td', {}, sel));
+          const p = pending.get(l.id);
+          const curStatus = p ? p.status : l.status, curNote = p ? p.note : (l.status_note || '');
+          const sel = el('select', { onchange: (e) => stage(o, l, { status: e.target.value }) },
+            ['TO BE ORDERED', 'ORDERED', 'COMPLETED'].map((s) => el('option', { value: s, textContent: s, selected: s === curStatus })));
+          const noteIn = el('input', { value: curNote, type: 'text', placeholder: 'Ordering note, e.g. OOS at supplier', maxLength: 200, title: 'Ordering note (saved with the status)', onchange: (e) => stage(o, l, { note: e.target.value }) });
+          tr.append(el('td', { className: 'statuscell' }, sel, noteIn));
+          if (p) tr.classList.add('pending');
         } else {
           const st = el('td', {}, el('span', { className: 'badge ' + BADGE[l.status], textContent: l.status }));
+          if (l.status_note) st.append(el('div', { className: 'status-note', textContent: l.status_note }));
           if (archived) st.append(el('div', { className: 'small muted', textContent: 'Exported ' + fmtDate(l.archived_at) }));
           tr.append(st);
         }
@@ -572,6 +670,9 @@
     // The actions column only appears when at least one row has an action for this user
     $('actHead').hidden = !anyAction;
     [...body.children].forEach((tr) => { tr.lastChild.hidden = !anyAction; });
+    const np = pending.size;
+    $('pendingBar').hidden = !np;
+    $('pendingBar').textContent = np ? np + ' unsaved status change' + (np === 1 ? '' : 's') + '. Nothing is saved until you click the EDIT VIEW lock to confirm.' : '';
     $('exportBtn').hidden = !(editing && isEditor());
     $('usersBtn').hidden = !(editing && isEditor());
     $('purgeBtn').hidden = !(editing && isEditor() && f === 'archived');
@@ -612,7 +713,7 @@
       const o = l.back_orders;
       return [pdfSafe(o.account), pdfSafe(o.order_ref), pdfSafe(l.part_number), pdfSafe(l.description),
         String(l.qty), pdfSafe(gbp.format(l.unit_cost)), pdfSafe(gbp.format(l.unit_price)),
-        [o.notes ? 'Order: ' + pdfSafe(o.notes) : '', l.notes ? 'Line: ' + pdfSafe(l.notes) : ''].filter(Boolean).join('\n'),
+        [o.notes ? 'Order: ' + pdfSafe(o.notes) : '', l.notes ? 'Line: ' + pdfSafe(l.notes) : '', l.status_note ? 'Ordering: ' + pdfSafe(l.status_note) : ''].filter(Boolean).join('\n'),
         pdfSafe(o.created_by), fmtDate(o.created_at), l.completed_at ? fmtDate(l.completed_at) : ''];
     });
 
@@ -867,7 +968,10 @@
   $('loginBtn').onclick = login;
   $('lp').addEventListener('keydown', (e) => e.key === 'Enter' && login());
   $('le').addEventListener('keydown', (e) => e.key === 'Enter' && $('lp').focus());
-  $('logoutBtn').onclick = () => signOut();
+  $('logoutBtn').onclick = () => {
+    if (pending.size && !window.confirm('You have ' + pending.size + ' unsaved status change' + (pending.size === 1 ? '' : 's') + '. Sign out and discard them?')) return;
+    signOut();
+  };
   // Sync tabs: if the session ends elsewhere, drop back to login. (No Supabase calls in this callback.)
   sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') showLogin(); });
 

@@ -191,12 +191,14 @@
   </header>
 
   <main>
-    <section class="card">
+    <section class="card" id="newOrderCard">
       <div class="card-label">New back order<span class="req-note"><span class="req">*</span> required</span></div>
       <div class="grid">
-        <div class="field"><label for="nAccount">Account <span class="req">*</span></label><input id="nAccount" class="caps"></div>
-        <div class="field"><label for="nRef">Order reference <span class="req">*</span></label><input id="nRef" class="caps"></div>
+        <div class="field"><label for="nAccount">Account Number <span class="req">*</span></label><input id="nAccount" class="caps"></div>
+        <div class="field"><label for="nAccountName">Account Name</label><input id="nAccountName" class="caps"></div>
+        <div class="field"><label for="nRef">Order Number <span class="req">*</span></label><input id="nRef" class="caps"></div>
         <div class="field"><label for="nNotes">Order notes</label><input id="nNotes" class="caps" placeholder="Applies to the whole back order"></div>
+        <div class="field"><label for="nRep">Sales rep (optional)</label><select id="nRep"><option value="">Not assigned</option></select></div>
       </div>
       <div class="lines-form" style="margin-top:12px">
         <div class="ln hdr muted"><span>Part number <span class="req">*</span></span><span>Description <span class="req">*</span></span><span>Qty <span class="req">*</span></span><span>Unit cost £</span><span>Unit price £</span><span>Line notes</span><span></span></div>
@@ -218,17 +220,17 @@
           <option value="all">All lines</option>
           <option value="archived" id="optArchived" hidden disabled>Archived lines</option>
         </select>
-        <input id="search" placeholder="Search account, order ref, part, notes…" style="flex:1;min-width:200px">
+        <input id="search" placeholder="Search account, order no, part, sales rep, notes…" style="flex:1;min-width:200px">
         <span class="muted" id="count"></span>
         <button id="purgeBtn" class="secondary danger" hidden>Purge all archived lines…</button>
       </div>
       <div class="pending-bar" id="pendingBar" hidden></div>
       <div class="tablewrap"><table>
         <thead><tr>
-          <th>Account</th><th>Order ref</th><th>Part no</th><th>Description</th>
+          <th>Account number</th><th>Account name</th><th>Order number</th><th>Part no</th><th>Description</th>
           <th class="num">Qty</th><th class="num">Unit cost £</th><th class="num">Unit price £</th>
           <th>Notes</th>
-          <th>Status</th><th>Raised by</th><th id="thRaised" class="sortable" tabindex="0" role="columnheader" aria-sort="descending" title="Click to sort by raised date">Raised <span id="sortArrow" aria-hidden="true">▼</span></th><th id="actHead" hidden></th>
+          <th>Status</th><th>Raised by</th><th id="thRep">Sales rep</th><th id="thRaised" class="sortable" tabindex="0" role="columnheader" aria-sort="descending" title="Click to sort by raised date">Raised <span id="sortArrow" aria-hidden="true">▼</span></th><th id="actHead" hidden></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table></div>
@@ -247,7 +249,7 @@
       <div class="field"><label for="umUser">Username <span class="req">*</span></label><input id="umUser" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="jack.thompson"></div>
       <div class="field"><label for="umPass">Password <span class="req">*</span></label>
         <div class="um-pass"><input id="umPass" maxlength="72" autocomplete="new-password" placeholder="6+ characters"><button class="secondary" id="umGen" type="button" title="Generate a password">Generate</button></div></div>
-      <div class="field"><label for="umRole">Role</label><select id="umRole"><option value="viewer">Viewer</option><option value="editor">Manager</option></select></div>
+      <div class="field"><label for="umRole">Role</label><select id="umRole"><option value="submitter">Submitter</option><option value="viewer">Viewer (sales rep)</option><option value="editor">Manager</option></select></div>
       <div class="field"><button class="primary" id="umAdd" type="button" style="padding:13px 20px">Add user</button></div>
     </div>
     <div class="hint">Username: letters, numbers, dots, dashes or underscores (3 to 40). Passwords are shown so you can pass them on.</div>
@@ -312,6 +314,8 @@
   let profile = null;      // { id, display_name, role }
   let editing = false;     // edit view is never persisted across refreshes
   let orders = [];
+  let reps = [];           // sales reps (role 'viewer') for the assignment dropdown: [{ id, display_name }]
+  const ROLE_LABEL = { editor: 'Manager', submitter: 'Submitter', viewer: 'Viewer' };
 
   const gbp = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
   const fmtShort = (s) => new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'Europe/London' });
@@ -323,6 +327,8 @@
     return e;
   };
   const isEditor = () => profile && profile.role === 'editor';
+  const isSubmitter = () => profile && profile.role === 'submitter';
+  const isViewer = () => profile && profile.role === 'viewer';      // sales reps: read-only, own assigned orders only
 
   function toast(msg, isErr) {
     const t = $('toast'); t.textContent = msg; t.className = isErr ? 'err' : ''; t.style.display = 'block';
@@ -353,12 +359,14 @@
       return;
     }
     profile = data; editing = false;
-    $('whoami').textContent = profile.display_name + ' \u00b7 ' + (isEditor() ? 'Manager' : 'Viewer');
+    $('whoami').textContent = profile.display_name + ' \u00b7 ' + (ROLE_LABEL[profile.role] || '');
     $('optArchived').hidden = $('optArchived').disabled = !isEditor();       // archive view is for Managers only
     if (!isEditor() && $('statusFilter').value === 'archived') $('statusFilter').value = 'open';
+    $('newOrderCard').hidden = isViewer();       // sales reps cannot raise back orders
+    $('thRep').hidden = isViewer();
     show('appView'); resetIdle();
     if (!$('newLines').children.length) addNewLine();
-    renderMode(); load();
+    renderMode(); loadReps(); load();
   }
   const toLoginEmail = (u) => { const v = String(u || '').trim().toLowerCase(); return v.includes('@') ? v : v + '@' + LOGIN_DOMAIN; };
   async function login() {
@@ -371,7 +379,7 @@
     await enter(data.user);
   }
   function showLogin() {
-    profile = null; editing = false; orders = []; pending.clear(); sortDir = 'desc'; $('sortArrow').textContent = '\u25BC'; $('thRaised').setAttribute('aria-sort', 'descending'); $('pendingModal').classList.remove('open');
+    profile = null; editing = false; orders = []; reps = []; pending.clear(); sortDir = 'desc'; $('sortArrow').textContent = '\u25BC'; $('thRaised').setAttribute('aria-sort', 'descending'); $('pendingModal').classList.remove('open');
     $('rows').innerHTML = '';                      // don't leave order data in the page after sign-out
     clearTimeout(idleTimer);
     closeUsers();
@@ -439,8 +447,9 @@
     return Math.round(n * 100) / 100;
   };
   const RULES = {
-    account: text('Account', 200, true),
-    orderRef: text('Order reference', 100, true),
+    account: text('Account number', 200, true),
+    accountName: text('Account name', 200, false),
+    orderRef: text('Order number', 100, true),
     orderNotes: text('Order notes', 1000, false),
     partNumber: text('Part number', 100, true),
     description: text('Description', 300, true),
@@ -454,6 +463,7 @@
     unitPrice: money('Unit price'),
     notes: text('Line notes', 1000, false),
     statusNote: text('Ordering note', 200, false),
+    assignedTo: (v) => { const s = String(v ?? '').trim(); if (!s) return null; if (!/^[0-9a-f-]{36}$/i.test(s)) throw new Error('Invalid sales rep'); return s; },
   };
   function parseLine(raw) {
     return {
@@ -480,6 +490,8 @@
     const btn = $('submitOrderBtn'); btn.disabled = true;
     try {
       const account = RULES.account($('nAccount').value);
+      const accountName = RULES.accountName($('nAccountName').value);
+      const assignedTo = RULES.assignedTo($('nRep').value);
       const orderRef = RULES.orderRef($('nRef').value);
       const notes = RULES.orderNotes($('nNotes').value);
       const lines = [...$('newLines').children].map((r, i) => {
@@ -487,9 +499,9 @@
         try { return parseLine({ partNumber: v[0], description: v[1], qty: v[2], unitCost: v[3], unitPrice: v[4], notes: v[5] }); }
         catch (e) { throw new Error('Line ' + (i + 1) + ': ' + e.message); }
       });
-      const { error } = await sb.rpc('create_back_order', { p_account: account, p_order_ref: orderRef, p_notes: notes, p_lines: lines });
+      const { error } = await sb.rpc('create_back_order', { p_account: account, p_account_name: accountName, p_order_ref: orderRef, p_notes: notes, p_assigned_to: assignedTo, p_lines: lines });
       if (error) throw fail(error);
-      ['nAccount', 'nRef', 'nNotes'].forEach((id) => ($(id).value = ''));
+      ['nAccount', 'nAccountName', 'nRef', 'nNotes', 'nRep'].forEach((id) => ($(id).value = ''));
       $('newLines').innerHTML = ''; addNewLine();
       toast('Back order logged');
       if (['completed', 'archived'].includes($('statusFilter').value)) $('statusFilter').value = 'open';
@@ -573,6 +585,7 @@
     try {
       const f = $('statusFilter').value;
       let q = sb.from('back_orders').select('*, product_lines!inner(*)');
+      if (isViewer()) q = q.eq('assigned_to', profile.id);       // convenience only: the database must also enforce this
       if (f === 'open') q = q.in('product_lines.status', ['TO BE ORDERED', 'ORDERED']);
       else if (f === 'completed') q = q.eq('product_lines.status', 'COMPLETED').is('product_lines.archived_at', null);
       else if (f === 'archived') q = q.not('product_lines.archived_at', 'is', null);
@@ -601,7 +614,7 @@
 
   const BADGE = { 'TO BE ORDERED': 's-TO', 'ORDERED': 's-OR', 'COMPLETED': 's-CO' };
   const LINE_COLS = { partNumber: 'part_number', description: 'description', qty: 'qty', unitCost: 'unit_cost', unitPrice: 'unit_price', notes: 'notes' };
-  const ORDER_COLS = { account: 'account', orderRef: 'order_ref', orderNotes: 'notes' };
+  const ORDER_COLS = { account: 'account', accountName: 'account_name', orderRef: 'order_ref', orderNotes: 'notes', assignedTo: 'assigned_to' };
 
   async function patchLine(id, field, value) {
     try {
@@ -633,8 +646,22 @@
 
   // Managers (in edit view) may delete any line. Everyone else may delete only lines they raised,
   // and only while TO BE ORDERED. The database enforces the same rule.
-  const canDelete = (l) => editing || (!isEditor() && profile && l.created_by_user === profile.id && l.status === 'TO BE ORDERED');
+  const canDelete = (l) => editing || (isSubmitter() && profile && l.created_by_user === profile.id && l.status === 'TO BE ORDERED');
   const lineSort = (a, b) => (a.line_no - b.line_no) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id));
+
+  const repName = (id) => (id && !isViewer() ? ((reps.find((r) => r.id === id) || {}).display_name || 'Unknown') : '');
+  async function loadReps() {
+    if (!profile || isViewer()) { reps = []; return; }
+    const keep = $('nRep').value;
+    const { data, error } = await sb.rpc('list_sales_reps');
+    if (error) toast('Could not load the sales rep list: ' + fail(error).message, true);
+    reps = data || [];
+    const sel = $('nRep'); sel.textContent = '';
+    sel.append(el('option', { value: '', textContent: 'Not assigned' }));
+    reps.forEach((r) => sel.append(el('option', { value: r.id, textContent: r.display_name })));
+    sel.value = reps.some((r) => r.id === keep) ? keep : '';
+    render();
+  }
 
   function render() {
     const f = $('statusFilter').value;
@@ -643,7 +670,7 @@
     let n = 0, anyAction = false;
     for (const o of orders) {
       const lines = [...(o.product_lines || [])].sort(lineSort).filter((l) =>
-        !q || [o.account, o.order_ref, o.notes, l.part_number, l.description, l.notes, l.status_note].join(' ').toLowerCase().includes(q));
+        !q || [o.account, o.account_name, o.order_ref, repName(o.assigned_to), o.notes, l.part_number, l.description, l.notes, l.status_note].join(' ').toLowerCase().includes(q));
       lines.forEach((l, idx) => {
         n++;
         const archived = !!l.archived_at;
@@ -658,13 +685,13 @@
 
         if (edit) {
           tr.append(
-            el('td', {}, tIn(o.account, order('account'))), el('td', {}, tIn(o.order_ref, order('orderRef'))),
+            el('td', {}, tIn(o.account, order('account'))), el('td', {}, tIn(o.account_name, order('accountName'))), el('td', {}, tIn(o.order_ref, order('orderRef'))),
             el('td', {}, tIn(l.part_number, line('partNumber'))), el('td', {}, tIn(l.description, line('description'))),
             el('td', { className: 'num' }, nIn(l.qty, line('qty'), '1')),
             el('td', { className: 'num' }, nIn(money2(l.unit_cost), line('unitCost'), '0.01')),
             el('td', { className: 'num' }, nIn(money2(l.unit_price), line('unitPrice'), '0.01')));
         } else {
-          tr.append(cell(o.account, 'caps'), cell(o.order_ref, 'caps'), cell(l.part_number, 'caps'), cell(l.description || '', 'caps'),
+          tr.append(cell(o.account, 'caps'), cell(o.account_name || '', 'caps'), cell(o.order_ref, 'caps'), cell(l.part_number, 'caps'), cell(l.description || '', 'caps'),
             cell(l.qty, 'num'), cell(gbp.format(l.unit_cost), 'num'), cell(gbp.format(l.unit_price), 'num'));
         }
 
@@ -691,7 +718,16 @@
           if (archived) st.append(el('div', { className: 'small muted', textContent: 'Exported ' + fmtDate(l.archived_at) }));
           tr.append(st);
         }
-        tr.append(cell(o.created_by), cell(fmtShort(o.created_at), 'nowrap'));
+        tr.append(cell(o.created_by));
+        if (!isViewer()) {
+          if (edit) {
+            const opts = [el('option', { value: '', textContent: 'Not assigned', selected: !o.assigned_to })];
+            if (o.assigned_to && !reps.some((r) => r.id === o.assigned_to)) opts.push(el('option', { value: o.assigned_to, textContent: repName(o.assigned_to), selected: true }));
+            reps.forEach((r) => opts.push(el('option', { value: r.id, textContent: r.display_name, selected: r.id === o.assigned_to })));
+            tr.append(el('td', {}, el('select', { title: 'Sales rep (applies to every line of the order)', onchange: (e) => patchOrder(o.id, 'assignedTo', e.target.value) }, opts)));
+          } else tr.append(cell(repName(o.assigned_to)));
+        }
+        tr.append(cell(fmtShort(o.created_at), 'nowrap'));
 
         const act = el('td', { style: 'white-space:nowrap' });
         if (archived) {
@@ -747,7 +783,7 @@
       (a.line_no - b.line_no) || String(a.created_at).localeCompare(String(b.created_at)));
     const rows = sorted.map((l) => {
       const o = l.back_orders;
-      return [pdfSafe(o.account), pdfSafe(o.order_ref), pdfSafe(l.part_number), pdfSafe(l.description),
+      return [pdfSafe(o.account), pdfSafe(o.account_name), pdfSafe(o.order_ref), pdfSafe(l.part_number), pdfSafe(l.description),
         String(l.qty), pdfSafe(gbp.format(l.unit_cost)), pdfSafe(gbp.format(l.unit_price)),
         [o.notes ? 'Order: ' + pdfSafe(o.notes) : '', l.notes ? 'Line: ' + pdfSafe(l.notes) : '', l.status_note ? 'Ordering: ' + pdfSafe(l.status_note) : ''].filter(Boolean).join('\n'),
         pdfSafe(o.created_by), fmtDate(o.created_at), l.completed_at ? fmtDate(l.completed_at) : ''];
@@ -770,7 +806,7 @@
     drawHeader();
 
     doc.autoTable({
-      head: [['ACCOUNT', 'ORDER REF', 'PART NO', 'DESCRIPTION', 'QTY', 'UNIT COST', 'UNIT PRICE', 'NOTES', 'RAISED BY', 'RAISED', 'COMPLETED']],
+      head: [['ACCOUNT NO', 'ACCOUNT NAME', 'ORDER NO', 'PART NO', 'DESCRIPTION', 'QTY', 'UNIT COST', 'UNIT PRICE', 'NOTES', 'RAISED BY', 'RAISED', 'COMPLETED']],
       body: rows,
       startY: 32,
       margin: { top: 32, left: M, right: M, bottom: 16 },
@@ -780,9 +816,9 @@
       headStyles: { fillColor: BRAND, textColor: 255, fontStyle: 'bold', fontSize: 6.8, lineColor: BRAND },
       alternateRowStyles: { fillColor: CARD },
       columnStyles: {
-        0: { cellWidth: 28 }, 1: { cellWidth: 22 }, 2: { cellWidth: 24 }, 3: { cellWidth: 47 },
-        4: { cellWidth: 10, halign: 'right' }, 5: { cellWidth: 17, halign: 'right' }, 6: { cellWidth: 17, halign: 'right' },
-        7: { cellWidth: 46 }, 8: { cellWidth: 22 }, 9: { cellWidth: 21 }, 10: { cellWidth: 19 },
+        0: { cellWidth: 22 }, 1: { cellWidth: 28 }, 2: { cellWidth: 20 }, 3: { cellWidth: 22 }, 4: { cellWidth: 40 },
+        5: { cellWidth: 9, halign: 'right' }, 6: { cellWidth: 16, halign: 'right' }, 7: { cellWidth: 16, halign: 'right' },
+        8: { cellWidth: 42 }, 9: { cellWidth: 20 }, 10: { cellWidth: 19 }, 11: { cellWidth: 19 },
       },
       didDrawPage: (data) => { if (data.pageNumber > 1) drawHeader(); },
     });
@@ -812,7 +848,7 @@
     const out = [], size = 500;
     for (let from = 0; ; from += size) {
       const { data, error } = await sb.from('product_lines')
-        .select('*, back_orders!inner(account, order_ref, notes, created_by, created_at)')
+        .select('*, back_orders!inner(account, account_name, order_ref, notes, created_by, created_at)')
         .eq('status', 'COMPLETED').is('archived_at', null)
         .order('created_at', { ascending: true }).order('id', { ascending: true })
         .range(from, from + size - 1);
@@ -912,7 +948,7 @@
     b.append(...nodes); b.hidden = false;
   };
 
-  function closeUsers() { $('usersModal').classList.remove('open'); umShowErr(''); umShowResult(null); umUsers = []; $('umRows').textContent = ''; }
+  function closeUsers() { const wasOpen = $('usersModal').classList.contains('open'); $('usersModal').classList.remove('open'); if (wasOpen && profile) loadReps(); umShowErr(''); umShowResult(null); umUsers = []; $('umRows').textContent = ''; }
   async function openUsers() {
     if (!editing || !isEditor()) return;
     $('usersModal').classList.add('open'); umShowErr(''); umShowResult(null);
@@ -924,7 +960,6 @@
       umUsers = r.users || []; umMe = r.me; renderUsers();
     } catch (e) { umShowErr(e.message); }
   }
-  const ROLE_LABEL = { editor: 'Manager', viewer: 'Viewer' };
   function renderUsers() {
     const body = $('umRows'); body.textContent = '';
     $('umCount').textContent = umUsers.length + (umUsers.length === 1 ? ' user' : ' users');
@@ -938,7 +973,7 @@
       else {
         const sel = el('select', { onchange: (e) => setUserRole(u, e.target.value) },
           ...(u.role ? [] : [el('option', { value: '', textContent: 'No access', selected: true })]),
-          ['viewer', 'editor'].map((r) => el('option', { value: r, textContent: ROLE_LABEL[r], selected: r === u.role })));
+          ['submitter', 'viewer', 'editor'].map((r) => el('option', { value: r, textContent: ROLE_LABEL[r], selected: r === u.role })));
         roleTd.append(sel);
       }
       tr.append(roleTd, el('td', { textContent: u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : 'Never', className: 'muted' }));
@@ -964,7 +999,7 @@
       umBusy = true; $('umAdd').disabled = true;
       await callUsers('create', { email: toLoginEmail(uname), password: pw, display_name: name, role: $('umRole').value });
       umShowResult(credBox(name + ' added. Username / password:', uname, pw));
-      ['umName', 'umUser', 'umPass'].forEach((id) => ($(id).value = '')); $('umRole').value = 'viewer';
+      ['umName', 'umUser', 'umPass'].forEach((id) => ($(id).value = '')); $('umRole').value = 'submitter';
       await loadUsers();
     } catch (e) { umShowErr(e.message); }
     umBusy = false; $('umAdd').disabled = false;

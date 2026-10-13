@@ -22,21 +22,29 @@
   header button { background: transparent; color: #fff; border-color: rgba(255,255,255,.45); }
   .pill { font-weight: 700; font-size: 12px; letter-spacing: .5px; padding: 5px 12px; border-radius: 999px; }
   .pill.view { background: #fff3; } .pill.edit { background: #f5b041; color: #3b2a00; border-color: #f5b041; }
-  main { max-width: 1300px; margin: 18px auto; padding: 0 16px; }
+  main { max-width: 1500px; margin: 18px auto; padding: 0 16px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
   .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; max-width: 100%; }
   input:focus, select:focus { outline: 2px solid #9db8dd; }
-  .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
   label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
-  .lines-form .ln { display: grid; grid-template-columns: 1.2fr 2.4fr .6fr .8fr auto; gap: 8px; margin-bottom: 8px; }
+  .req { color: var(--bad); font-weight: 700; }
+  .lines-form .ln { display: grid; grid-template-columns: 1.1fr 2fr .5fr .75fr .75fr 1.6fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
   .lines-form .ln input { width: 100%; }
+  .lines-form .hdr { font-size: 12px; margin-bottom: 4px; }
+  @media (max-width: 900px) {
+    .lines-form .ln { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+    .lines-form .hdr { display: none; }
+  }
   table { width: 100%; border-collapse: collapse; background: #fff; }
   th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-  th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: #f7f9fb; position: sticky; top: 0; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: #f7f9fb; position: sticky; top: 0; white-space: nowrap; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td input { width: 100%; padding: 3px 5px; } td input.n { text-align: right; }
-  .tablewrap { overflow-x: auto; }
+  td input { width: 100%; padding: 3px 5px; } td input.n { text-align: right; min-width: 70px; }
+  td input.t { min-width: 110px; }
+  td.notes { min-width: 170px; } td.notes input + input { margin-top: 4px; }
+  .small { font-size: 12px; } .tablewrap { overflow-x: auto; }
   .order-start td { border-top: 2px solid var(--line); }
   .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .s-TO { background: #fdecea; color: var(--bad); } .s-OR { background: #fef5e7; color: var(--warn); }
@@ -81,14 +89,14 @@
 
   <main>
     <section class="card">
-      <div class="toolbar"><strong>New back order</strong></div>
+      <div class="toolbar"><strong>New back order</strong> <span class="muted small"><span class="req">*</span> required</span></div>
       <div class="grid">
-        <div><label for="nAccount">Account</label><input id="nAccount" style="width:100%"></div>
-        <div><label for="nRef">Order reference</label><input id="nRef" style="width:100%"></div>
-        <div><label for="nNotes">Notes (optional)</label><input id="nNotes" style="width:100%"></div>
+        <div><label for="nAccount">Account <span class="req">*</span></label><input id="nAccount" style="width:100%"></div>
+        <div><label for="nRef">Order reference <span class="req">*</span></label><input id="nRef" style="width:100%"></div>
+        <div><label for="nNotes">Order notes</label><input id="nNotes" style="width:100%" placeholder="Applies to the whole back order"></div>
       </div>
       <div class="lines-form" style="margin-top:12px">
-        <div class="ln muted" style="font-size:12px"><span>Part number</span><span>Description</span><span>Qty</span><span>Unit cost £</span><span></span></div>
+        <div class="ln hdr muted"><span>Part number <span class="req">*</span></span><span>Description <span class="req">*</span></span><span>Qty <span class="req">*</span></span><span>Unit cost £</span><span>Unit price £</span><span>Line notes</span><span></span></div>
         <div id="newLines"></div>
         <button id="addLineBtn">+ Add line</button>
       </div>
@@ -105,13 +113,14 @@
           <option value="completed">Completed lines</option>
           <option value="all">All lines</option>
         </select>
-        <input id="search" placeholder="Search account, order ref, part…" style="flex:1;min-width:200px">
+        <input id="search" placeholder="Search account, order ref, part, notes…" style="flex:1;min-width:200px">
         <span class="muted" id="count"></span>
       </div>
       <div class="tablewrap"><table>
         <thead><tr>
           <th>Account</th><th>Order ref</th><th>Part no</th><th>Description</th>
-          <th class="num">Qty</th><th class="num">Unit £</th><th class="num">Total £</th>
+          <th class="num">Qty</th><th class="num">Unit cost £</th><th class="num">Unit price £</th>
+          <th class="num">Total cost £</th><th class="num">Total price £</th><th>Notes</th>
           <th>Status</th><th>Raised by</th><th>Raised</th><th id="actHead" hidden></th>
         </tr></thead>
         <tbody id="rows"></tbody>
@@ -170,6 +179,8 @@
     }
     if (/jwt|not authenticated/i.test(m)) { signOut(); return new Error('Session expired. Please sign in again.'); }
     if (error && error.code === '23514') return new Error('Check the values: a field is empty, too long, or out of range.');
+    if (error && error.code === '23502') return new Error('A required field is empty.');
+    if (error && error.code === '22003') return new Error('A number is too large.');
     return new Error(m);
   }
 
@@ -207,23 +218,47 @@
     b.textContent = editing ? 'EDIT MODE' : 'VIEW ONLY';
     b.className = 'pill ' + (editing ? 'edit' : 'view');
     b.title = isEditor() ? 'Click to switch edit mode on or off' : 'Your account is read-only';
-    $('actHead').hidden = !editing;
     render();
   }
   $('modeBtn').onclick = () => { if (!isEditor()) return; editing = !editing; renderMode(); toast(editing ? 'Edit mode on' : 'Edit mode off'); };
 
-  // ---------- Validation (mirrors the database rules) ----------
+  // ---------- Validation (mirrors the database rules; the database is the final check) ----------
+  const text = (label, max, required) => (v) => {
+    const s = String(v ?? '').trim();
+    if (required && !s) throw new Error(label + ' is required');
+    if (s.length > max) throw new Error(label + ' is too long (' + max + ' characters max)');
+    return required ? s : (s || null);
+  };
+  const money = (label) => (v) => {
+    const s = String(v ?? '').trim();
+    if (s === '') return 0;                       // blank defaults to £0.00
+    const n = Number(s);
+    if (!Number.isFinite(n) || n < 0) throw new Error(label + ' must be 0 or more');
+    if (n > 9999999999) throw new Error(label + ' is too large');
+    return Math.round(n * 100) / 100;
+  };
+  const RULES = {
+    account: text('Account', 200, true),
+    orderRef: text('Order reference', 100, true),
+    orderNotes: text('Order notes', 1000, false),
+    partNumber: text('Part number', 100, true),
+    description: text('Description', 300, true),
+    qty: (v) => {
+      const s = String(v ?? '').trim(); const n = Number(s);
+      if (s === '' || !Number.isInteger(n) || n < 1) throw new Error('Quantity must be a whole number of 1 or more');
+      if (n > 1000000) throw new Error('Quantity is too large');
+      return n;
+    },
+    unitCost: money('Unit cost'),
+    unitPrice: money('Unit price'),
+    notes: text('Line notes', 1000, false),
+  };
   function parseLine(raw) {
-    const part_number = String(raw.partNumber ?? '').trim();
-    const description = String(raw.description ?? '').trim();
-    const qty = Number(raw.qty);
-    const unit_cost = raw.unitCost === '' || raw.unitCost == null ? 0 : Number(raw.unitCost);
-    if (!part_number) throw new Error('Part number is required');
-    if (part_number.length > 100) throw new Error('Part number is too long');
-    if (description.length > 300) throw new Error('Description is too long (300 max)');
-    if (!Number.isInteger(qty) || qty < 1) throw new Error('Quantity must be a whole number of 1 or more');
-    if (!Number.isFinite(unit_cost) || unit_cost < 0) throw new Error('Unit cost must be 0 or more');
-    return { part_number, description, qty, unit_cost: Math.round(unit_cost * 100) / 100 };
+    return {
+      part_number: RULES.partNumber(raw.partNumber), description: RULES.description(raw.description),
+      qty: RULES.qty(raw.qty), unit_cost: RULES.unitCost(raw.unitCost), unit_price: RULES.unitPrice(raw.unitPrice),
+      notes: RULES.notes(raw.notes),
+    };
   }
 
   // ---------- New order form ----------
@@ -232,6 +267,8 @@
       el('input', { placeholder: 'Part no' }), el('input', { placeholder: 'Description' }),
       el('input', { type: 'number', min: 1, step: 1, value: 1 }),
       el('input', { type: 'number', min: 0, step: '0.01', placeholder: '0.00' }),
+      el('input', { type: 'number', min: 0, step: '0.01', placeholder: '0.00' }),
+      el('input', { placeholder: 'Notes for this line' }),
       el('button', { textContent: '✕', title: 'Remove line', onclick: () => { if ($('newLines').children.length > 1) row.remove(); } }));
     $('newLines').append(row);
   }
@@ -240,13 +277,13 @@
     $('newErr').textContent = '';
     const btn = $('submitOrderBtn'); btn.disabled = true;
     try {
-      const account = $('nAccount').value.trim(), orderRef = $('nRef').value.trim(), notes = $('nNotes').value.trim();
-      if (!account) throw new Error('Account is required');
-      if (!orderRef) throw new Error('Order reference is required');
-      if (account.length > 200 || orderRef.length > 100 || notes.length > 1000) throw new Error('A field is too long');
-      const lines = [...$('newLines').children].map((r) => {
-        const i = r.querySelectorAll('input');
-        return parseLine({ partNumber: i[0].value, description: i[1].value, qty: i[2].value, unitCost: i[3].value });
+      const account = RULES.account($('nAccount').value);
+      const orderRef = RULES.orderRef($('nRef').value);
+      const notes = RULES.orderNotes($('nNotes').value);
+      const lines = [...$('newLines').children].map((r, i) => {
+        const v = [...r.querySelectorAll('input')].map((x) => x.value);
+        try { return parseLine({ partNumber: v[0], description: v[1], qty: v[2], unitCost: v[3], unitPrice: v[4], notes: v[5] }); }
+        catch (e) { throw new Error('Line ' + (i + 1) + ': ' + e.message); }
       });
       const { error } = await sb.rpc('create_back_order', { p_account: account, p_order_ref: orderRef, p_notes: notes, p_lines: lines });
       if (error) throw fail(error);
@@ -276,57 +313,80 @@
   $('search').oninput = render;
 
   const BADGE = { 'TO BE ORDERED': 's-TO', 'ORDERED': 's-OR', 'COMPLETED': 's-CO' };
-  const COLS = { partNumber: 'part_number', description: 'description', qty: 'qty', unitCost: 'unit_cost', status: 'status' };
+  const LINE_COLS = { partNumber: 'part_number', description: 'description', qty: 'qty', unitCost: 'unit_cost', unitPrice: 'unit_price', notes: 'notes' };
+  const ORDER_COLS = { account: 'account', orderRef: 'order_ref', orderNotes: 'notes' };
 
   async function patchLine(id, field, value) {
     try {
-      const patch = {};
-      if (field === 'status') patch.status = value;
-      else {
-        // validate the single edited field using the same rules as new lines
-        const probe = { partNumber: 'x', description: '', qty: 1, unitCost: 0, [field]: value };
-        patch[COLS[field]] = parseLine(probe)[COLS[field]];
-      }
+      const patch = field === 'status' ? { status: value } : { [LINE_COLS[field]]: RULES[field](value) };
       const { data, error } = await sb.from('product_lines').update(patch).eq('id', id).select().maybeSingle();
       if (error) throw fail(error);
       if (!data) throw new Error('Not saved: you may not have permission, or the line no longer exists.');
       toast('Saved'); await load();
     } catch (e) { toast(e.message, true); load(); }
   }
-  async function del(table, id, what) {
-    if (!confirm('Delete ' + what + '? This cannot be undone.')) return;
+  // account, order reference and order notes belong to the whole back order, so they change on every line of it
+  async function patchOrder(id, field, value) {
     try {
-      const { data, error } = await sb.from(table).delete().eq('id', id).select('id');
+      const { data, error } = await sb.from('back_orders').update({ [ORDER_COLS[field]]: RULES[field](value) }).eq('id', id).select().maybeSingle();
       if (error) throw fail(error);
-      if (!data || !data.length) throw new Error('Nothing was deleted: you may not have permission.');
+      if (!data) throw new Error('Not saved: you may not have permission, or the order no longer exists.');
+      toast('Saved. This applies to every line of the order.'); await load();
+    } catch (e) { toast(e.message, true); load(); }
+  }
+  async function delLine(id) {
+    if (!confirm('Delete this line? This cannot be undone.')) return;
+    try {
+      const { data, error } = await sb.from('product_lines').delete().eq('id', id).select('id');
+      if (error) throw fail(error);
+      if (!data || !data.length) throw new Error('Nothing was deleted. Only the person who raised a line can delete it, and only while it is TO BE ORDERED.');
       toast('Deleted'); load();
     } catch (e) { toast(e.message, true); }
   }
 
+  // Editors (in edit mode) may delete any line. Everyone else may delete only lines they raised,
+  // and only while TO BE ORDERED. The database enforces the same rule.
+  const canDelete = (l) => editing || (!isEditor() && profile && l.created_by_user === profile.id && l.status === 'TO BE ORDERED');
+  const lineSort = (a, b) => (a.line_no - b.line_no) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id));
+
   function render() {
     const q = $('search').value.trim().toLowerCase();
     const body = $('rows'); body.innerHTML = '';
-    let n = 0;
+    let n = 0, anyDelete = false;
     for (const o of orders) {
-      const lines = (o.product_lines || []).filter((l) =>
-        !q || [o.account, o.order_ref, l.part_number, l.description].join(' ').toLowerCase().includes(q));
+      const lines = [...(o.product_lines || [])].sort(lineSort).filter((l) =>
+        !q || [o.account, o.order_ref, o.notes, l.part_number, l.description, l.notes].join(' ').toLowerCase().includes(q));
       lines.forEach((l, idx) => {
         n++;
         const tr = el('tr', { className: idx === 0 ? 'order-start' : '' });
-        const cell = (v) => el('td', { textContent: v });
-        const input = (field, val, cls = '', type = 'text') => el('td', { className: cls === 'n' ? 'num' : '' },
-          el('input', { value: val ?? '', type, className: cls, step: type === 'number' ? (field === 'unitCost' ? '0.01' : '1') : undefined, min: type === 'number' ? 0 : undefined,
-            onchange: (e) => patchLine(l.id, field, e.target.value) }));
+        const cell = (v, cls = '') => el('td', { textContent: v, className: cls });
+        const tIn = (val, onSave, ph) => el('input', { value: val ?? '', type: 'text', className: 't', placeholder: ph, onchange: (e) => onSave(e.target.value) });
+        const nIn = (val, onSave, step) => el('input', { value: val, type: 'number', className: 'n', step, min: 0, onchange: (e) => onSave(e.target.value) });
+        const line = (f) => (v) => patchLine(l.id, f, v);
+        const order = (f) => (v) => patchOrder(o.id, f, v);
+        const money2 = (v) => Number(v).toFixed(2);
 
-        tr.append(cell(o.account), cell(o.order_ref));
         if (editing) {
-          tr.append(input('partNumber', l.part_number), input('description', l.description),
-            input('qty', l.qty, 'n', 'number'), input('unitCost', Number(l.unit_cost).toFixed(2), 'n', 'number'));
+          tr.append(
+            el('td', {}, tIn(o.account, order('account'))), el('td', {}, tIn(o.order_ref, order('orderRef'))),
+            el('td', {}, tIn(l.part_number, line('partNumber'))), el('td', {}, tIn(l.description, line('description'))),
+            el('td', { className: 'num' }, nIn(l.qty, line('qty'), '1')),
+            el('td', { className: 'num' }, nIn(money2(l.unit_cost), line('unitCost'), '0.01')),
+            el('td', { className: 'num' }, nIn(money2(l.unit_price), line('unitPrice'), '0.01')));
         } else {
-          tr.append(cell(l.part_number), cell(l.description || ''),
-            el('td', { className: 'num', textContent: l.qty }), el('td', { className: 'num', textContent: gbp.format(l.unit_cost) }));
+          tr.append(cell(o.account), cell(o.order_ref), cell(l.part_number), cell(l.description || ''),
+            cell(l.qty, 'num'), cell(gbp.format(l.unit_cost), 'num'), cell(gbp.format(l.unit_price), 'num'));
         }
-        tr.append(el('td', { className: 'num', textContent: gbp.format(l.qty * l.unit_cost) }));
+        tr.append(cell(gbp.format(l.qty * l.unit_cost), 'num'), cell(gbp.format(l.qty * l.unit_price), 'num'));
+
+        const notes = el('td', { className: 'notes' });
+        if (editing) {
+          notes.append(tIn(o.notes, order('orderNotes'), 'Order note (whole order)'), tIn(l.notes, line('notes'), 'Line note'));
+        } else {
+          if (o.notes) notes.append(el('div', { className: 'small muted', textContent: 'Order: ' + o.notes }));
+          if (l.notes) notes.append(el('div', { className: 'small', textContent: 'Line: ' + l.notes }));
+        }
+        tr.append(notes);
 
         if (editing) {
           const sel = el('select', { onchange: (e) => patchLine(l.id, 'status', e.target.value) },
@@ -337,14 +397,15 @@
         }
         tr.append(cell(o.created_by), cell(fmtDate(o.created_at)));
 
-        if (editing) {
-          const act = el('td', { style: 'white-space:nowrap' });
-          act.append(el('button', { className: 'danger', textContent: 'Delete line', onclick: () => del('product_lines', l.id, 'this line') }));
-          tr.append(act);
-        }
+        const act = el('td', { style: 'white-space:nowrap' });
+        if (canDelete(l)) { anyDelete = true; act.append(el('button', { className: 'danger', textContent: 'Delete line', onclick: () => delLine(l.id) })); }
+        tr.append(act);
         body.append(tr);
       });
     }
+    // The actions column only appears when at least one row can be deleted by this user
+    $('actHead').hidden = !anyDelete;
+    [...body.children].forEach((tr) => { tr.lastChild.hidden = !anyDelete; });
     $('empty').hidden = n > 0;
     $('count').textContent = n + ' line' + (n === 1 ? '' : 's');
   }

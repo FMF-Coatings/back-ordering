@@ -130,7 +130,7 @@
   <div class="login-title">Back Orders</div>
   <div class="login-sub">FMF Coatings</div>
   <div class="login-box">
-    <div class="field"><label for="le">Email</label><input id="le" type="email" autocomplete="username" autocapitalize="none"></div>
+    <div class="field"><label for="le">Username</label><input id="le" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. jack.thompson"></div>
     <div class="field"><label for="lp">Password</label><input id="lp" type="password" autocomplete="current-password"></div>
     <div class="err-text" id="loginErr" role="status"></div>
     <button class="primary" id="loginBtn">Sign in</button>
@@ -211,6 +211,10 @@
   // Both values are PUBLIC by design. Never paste the service_role / secret key here.
   const SUPABASE_URL = 'https://uvaxhivuxajtrwbpadfp.supabase.co';        // e.g. https://abcdxyz.supabase.co
   const SUPABASE_ANON_KEY = 'sb_publishable_Kt7xapnUsM4_aiSMpOVLfA_BLfE0jlZ';
+  // People sign in with a username. Behind the scenes it becomes username@LOGIN_DOMAIN (no email is ever sent).
+  // Use a domain you own. A login that already contains an @ (e.g. an existing work email) is used as typed.
+  const LOGIN_DOMAIN = 'backorders.fmfcoatings.co.uk';
+  const IDLE_LOGOUT_MS = 15 * 60 * 1000;          // managers are signed out after 15 minutes without activity
   // ================================================================
 
   const $ = (id) => document.getElementById(id);
@@ -221,7 +225,11 @@
     if (!window.supabase) $('setupView').insertAdjacentText('beforeend', 'The Supabase library failed to load. Check your internet connection.');
     return;
   }
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // persistSession:false: the login lives only in this tab's memory, so closing or refreshing signs out.
+  // A shared PC is never left signed in.
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+  });
 
   let profile = null;      // { id, display_name, role }
   let editing = false;     // edit mode is never persisted across refreshes
@@ -266,24 +274,43 @@
       return;
     }
     profile = data; editing = false;
-    $('whoami').textContent = profile.display_name + (isEditor() ? '' : ' (viewer)');
+    $('whoami').textContent = profile.display_name + ' \u00b7 ' + (isEditor() ? 'Manager' : 'Viewer');
     $('optArchived').hidden = $('optArchived').disabled = !isEditor();       // archive view is for editors only
     if (!isEditor() && $('statusFilter').value === 'archived') $('statusFilter').value = 'open';
-    show('appView');
+    show('appView'); resetIdle();
     if (!$('newLines').children.length) addNewLine();
     renderMode(); load();
   }
+  const toLoginEmail = (u) => { const v = String(u || '').trim().toLowerCase(); return v.includes('@') ? v : v + '@' + LOGIN_DOMAIN; };
   async function login() {
     $('loginErr').textContent = '';
     $('loginBtn').disabled = true;
-    const { data, error } = await sb.auth.signInWithPassword({ email: $('le').value.trim(), password: $('lp').value });
+    const { data, error } = await sb.auth.signInWithPassword({ email: toLoginEmail($('le').value), password: $('lp').value });
     $('loginBtn').disabled = false;
-    if (error) { $('loginErr').textContent = 'Invalid email or password.'; return; }
+    if (error) { $('loginErr').textContent = /invalid login credentials/i.test(error.message) ? 'Username or password is incorrect.' : 'Sign-in failed: ' + error.message; return; }
     $('lp').value = '';
     await enter(data.user);
   }
-  function showLogin() { profile = null; editing = false; show('loginView'); }
-  async function signOut() { await sb.auth.signOut(); showLogin(); }
+  function showLogin() {
+    profile = null; editing = false; orders = [];
+    $('rows').innerHTML = '';                      // don't leave order data in the page after sign-out
+    clearTimeout(idleTimer);
+    show('loginView');
+  }
+  async function signOut(message) {
+    try { await sb.auth.signOut(); } catch (e) { /* ignore */ }
+    showLogin();
+    if (typeof message === 'string') toast(message);
+  }
+
+  // Managers can change and delete data, so they are signed out after 15 minutes of inactivity.
+  let idleTimer = null;
+  function resetIdle() {
+    clearTimeout(idleTimer);
+    if (!profile || !isEditor()) return;
+    idleTimer = setTimeout(() => signOut('Signed out after 15 minutes of inactivity.'), IDLE_LOGOUT_MS);
+  }
+  ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach((ev) => window.addEventListener(ev, resetIdle, { passive: true }));
 
   // ---------- Edit mode (a convenience toggle; the database enforces who may edit) ----------
   function renderMode() {
@@ -663,7 +690,7 @@
   $('loginBtn').onclick = login;
   $('lp').addEventListener('keydown', (e) => e.key === 'Enter' && login());
   $('le').addEventListener('keydown', (e) => e.key === 'Enter' && $('lp').focus());
-  $('logoutBtn').onclick = signOut;
+  $('logoutBtn').onclick = () => signOut();
   // Sync tabs: if the session ends elsewhere, drop back to login. (No Supabase calls in this callback.)
   sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') showLogin(); });
 

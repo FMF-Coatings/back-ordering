@@ -120,7 +120,7 @@
         <thead><tr>
           <th>Account</th><th>Order ref</th><th>Part no</th><th>Description</th>
           <th class="num">Qty</th><th class="num">Unit cost £</th><th class="num">Unit price £</th>
-          <th class="num">Total cost £</th><th class="num">Total price £</th><th>Notes</th>
+          <th>Notes</th>
           <th>Status</th><th>Raised by</th><th>Raised</th><th id="actHead" hidden></th>
         </tr></thead>
         <tbody id="rows"></tbody>
@@ -377,7 +377,6 @@
           tr.append(cell(o.account), cell(o.order_ref), cell(l.part_number), cell(l.description || ''),
             cell(l.qty, 'num'), cell(gbp.format(l.unit_cost), 'num'), cell(gbp.format(l.unit_price), 'num'));
         }
-        tr.append(cell(gbp.format(l.qty * l.unit_cost), 'num'), cell(gbp.format(l.qty * l.unit_price), 'num'));
 
         const notes = el('td', { className: 'notes' });
         if (editing) {

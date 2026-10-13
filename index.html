@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>FMF Coatings: Back Orders</title>
+<style>
+  :root {
+    --brand: #1f3a5f; --brand-2: #2b5288; --bg: #f3f5f8; --card: #fff; --line: #dde3ea;
+    --text: #1d2733; --muted: #6a7686; --ok: #1d8348; --warn: #b9770e; --bad: #b03a2e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--brand); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .5px; flex: 1; }
+  header .who { opacity: .85; }
+  button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: #fff; padding: 6px 12px; }
+  button.primary { background: var(--brand-2); color: #fff; border-color: var(--brand-2); }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .6; cursor: default; }
+  header button { background: transparent; color: #fff; border-color: rgba(255,255,255,.45); }
+  .pill { font-weight: 700; font-size: 12px; letter-spacing: .5px; padding: 5px 12px; border-radius: 999px; }
+  .pill.view { background: #fff3; } .pill.edit { background: #f5b041; color: #3b2a00; border-color: #f5b041; }
+  main { max-width: 1300px; margin: 18px auto; padding: 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; max-width: 100%; }
+  input:focus, select:focus { outline: 2px solid #9db8dd; }
+  .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .lines-form .ln { display: grid; grid-template-columns: 1.2fr 2.4fr .6fr .8fr auto; gap: 8px; margin-bottom: 8px; }
+  .lines-form .ln input { width: 100%; }
+  table { width: 100%; border-collapse: collapse; background: #fff; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: #f7f9fb; position: sticky; top: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td input { width: 100%; padding: 3px 5px; } td input.n { text-align: right; }
+  .tablewrap { overflow-x: auto; }
+  .order-start td { border-top: 2px solid var(--line); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .s-TO { background: #fdecea; color: var(--bad); } .s-OR { background: #fef5e7; color: var(--warn); }
+  .s-CO { background: #e8f6ef; color: var(--ok); }
+  .muted { color: var(--muted); } .empty { padding: 28px; text-align: center; color: var(--muted); }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1d2733; color: #fff; padding: 10px 16px; border-radius: 8px; display: none; z-index: 50; max-width: 90vw; }
+  #toast.err { background: var(--bad); }
+  .login { max-width: 340px; margin: 12vh auto; } .login .card > * { margin-bottom: 10px; } .login input { width: 100%; }
+  .err-text { color: var(--bad); min-height: 18px; }
+  .setup { max-width: 560px; margin: 12vh auto; }
+  code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- SETUP WARNING (shown only until the two values below are filled in) -->
+<div id="setupView" class="setup card" hidden>
+  <h2 style="margin-top:0;color:var(--bad)">Not configured yet</h2>
+  <p>Open <code>index.html</code>, find the <code>CONFIG</code> block near the bottom, and paste in your Supabase <strong>Project URL</strong> and <strong>anon (public) key</strong>. See README.md, step 5.</p>
+</div>
+
+<!-- LOGIN -->
+<div id="loginView" class="login" hidden>
+  <div class="card">
+    <h2 style="margin-top:0;color:var(--brand)">FMF Coatings<br><span style="font-size:15px;font-weight:400" class="muted">Back Order System</span></h2>
+    <div><label for="le">Email</label><input id="le" type="email" autocomplete="username" autocapitalize="none"></div>
+    <div><label for="lp">Password</label><input id="lp" type="password" autocomplete="current-password"></div>
+    <div class="err-text" id="loginErr"></div>
+    <button class="primary" id="loginBtn" style="width:100%">Sign in</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appView" hidden>
+  <header>
+    <h1>FMF COATINGS · BACK ORDERS</h1>
+    <span class="who" id="whoami"></span>
+    <button id="modeBtn" class="pill view">VIEW ONLY</button>
+    <button id="logoutBtn">Sign out</button>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="toolbar"><strong>New back order</strong></div>
+      <div class="grid">
+        <div><label for="nAccount">Account</label><input id="nAccount" style="width:100%"></div>
+        <div><label for="nRef">Order reference</label><input id="nRef" style="width:100%"></div>
+        <div><label for="nNotes">Notes (optional)</label><input id="nNotes" style="width:100%"></div>
+      </div>
+      <div class="lines-form" style="margin-top:12px">
+        <div class="ln muted" style="font-size:12px"><span>Part number</span><span>Description</span><span>Qty</span><span>Unit cost £</span><span></span></div>
+        <div id="newLines"></div>
+        <button id="addLineBtn">+ Add line</button>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+        <button class="primary" id="submitOrderBtn">Submit back order</button>
+        <span class="err-text" id="newErr"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <select id="statusFilter" title="Which lines to show">
+          <option value="open">Open lines (to be ordered / ordered)</option>
+          <option value="completed">Completed lines</option>
+          <option value="all">All lines</option>
+        </select>
+        <input id="search" placeholder="Search account, order ref, part…" style="flex:1;min-width:200px">
+        <span class="muted" id="count"></span>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr>
+          <th>Account</th><th>Order ref</th><th>Part no</th><th>Description</th>
+          <th class="num">Qty</th><th class="num">Unit £</th><th class="num">Total £</th>
+          <th>Status</th><th>Raised by</th><th>Raised</th><th id="actHead" hidden></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <div class="empty" id="empty" hidden>Nothing to show.</div>
+    </section>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<!-- Pinned to an exact version so a CDN update can't silently change behaviour -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script>
+(() => {
+  // ============================ CONFIG ============================
+  // Both values are PUBLIC by design. Never paste the service_role / secret key here.
+  const SUPABASE_URL = 'YOUR-PROJECT-URL';        // e.g. https://abcdxyz.supabase.co
+  const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+  // ================================================================
+
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => ['setupView', 'loginView', 'appView'].forEach((v) => ($(v).hidden = v !== id));
+
+  if (!/^https:\/\/.+\..+/.test(SUPABASE_URL) || SUPABASE_ANON_KEY.startsWith('YOUR-') || !window.supabase) {
+    show('setupView');
+    if (!window.supabase) $('setupView').insertAdjacentText('beforeend', 'The Supabase library failed to load. Check your internet connection.');
+    return;
+  }
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let profile = null;      // { id, display_name, role }
+  let editing = false;     // edit mode is never persisted across refreshes
+  let orders = [];
+
+  const gbp = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+  const fmtDate = (s) => new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const el = (tag, props = {}, ...kids) => {
+    const e = document.createElement(tag);
+    Object.assign(e, props);
+    kids.flat().forEach((k) => e.append(k));
+    return e;
+  };
+  const isEditor = () => profile && profile.role === 'editor';
+
+  function toast(msg, isErr) {
+    const t = $('toast'); t.textContent = msg; t.className = isErr ? 'err' : ''; t.style.display = 'block';
+    clearTimeout(toast.h); toast.h = setTimeout(() => (t.style.display = 'none'), isErr ? 5000 : 2500);
+  }
+
+  // Turn a Supabase error into something a person can act on
+  function fail(error) {
+    const m = (error && error.message) || 'Request failed';
+    if (error && (error.code === '42501' || /permission denied|row-level security|not authorised/i.test(m))) {
+      return new Error('You do not have permission to do that.');
+    }
+    if (/jwt|not authenticated/i.test(m)) { signOut(); return new Error('Session expired. Please sign in again.'); }
+    if (error && error.code === '23514') return new Error('Check the values: a field is empty, too long, or out of range.');
+    return new Error(m);
+  }
+
+  // ---------- Auth ----------
+  async function enter(user) {
+    const { data, error } = await sb.from('profiles').select('id, display_name, role').eq('id', user.id).maybeSingle();
+    if (error || !data) {
+      await sb.auth.signOut();
+      show('loginView');
+      $('loginErr').textContent = error ? fail(error).message : 'You are signed in, but your account has not been set up for this app yet. Ask an admin.';
+      return;
+    }
+    profile = data; editing = false;
+    $('whoami').textContent = profile.display_name + (isEditor() ? '' : ' (viewer)');
+    show('appView');
+    if (!$('newLines').children.length) addNewLine();
+    renderMode(); load();
+  }
+  async function login() {
+    $('loginErr').textContent = '';
+    $('loginBtn').disabled = true;
+    const { data, error } = await sb.auth.signInWithPassword({ email: $('le').value.trim(), password: $('lp').value });
+    $('loginBtn').disabled = false;
+    if (error) { $('loginErr').textContent = 'Invalid email or password.'; return; }
+    $('lp').value = '';
+    await enter(data.user);
+  }
+  function showLogin() { profile = null; editing = false; show('loginView'); }
+  async function signOut() { await sb.auth.signOut(); showLogin(); }
+
+  // ---------- Edit mode (a convenience toggle; the database enforces who may edit) ----------
+  function renderMode() {
+    const b = $('modeBtn');
+    b.disabled = !isEditor();
+    b.textContent = editing ? 'EDIT MODE' : 'VIEW ONLY';
+    b.className = 'pill ' + (editing ? 'edit' : 'view');
+    b.title = isEditor() ? 'Click to switch edit mode on or off' : 'Your account is read-only';
+    $('actHead').hidden = !editing;
+    render();
+  }
+  $('modeBtn').onclick = () => { if (!isEditor()) return; editing = !editing; renderMode(); toast(editing ? 'Edit mode on' : 'Edit mode off'); };
+
+  // ---------- Validation (mirrors the database rules) ----------
+  function parseLine(raw) {
+    const part_number = String(raw.partNumber ?? '').trim();
+    const description = String(raw.description ?? '').trim();
+    const qty = Number(raw.qty);
+    const unit_cost = raw.unitCost === '' || raw.unitCost == null ? 0 : Number(raw.unitCost);
+    if (!part_number) throw new Error('Part number is required');
+    if (part_number.length > 100) throw new Error('Part number is too long');
+    if (description.length > 300) throw new Error('Description is too long (300 max)');
+    if (!Number.isInteger(qty) || qty < 1) throw new Error('Quantity must be a whole number of 1 or more');
+    if (!Number.isFinite(unit_cost) || unit_cost < 0) throw new Error('Unit cost must be 0 or more');
+    return { part_number, description, qty, unit_cost: Math.round(unit_cost * 100) / 100 };
+  }
+
+  // ---------- New order form ----------
+  function addNewLine() {
+    const row = el('div', { className: 'ln' },
+      el('input', { placeholder: 'Part no' }), el('input', { placeholder: 'Description' }),
+      el('input', { type: 'number', min: 1, step: 1, value: 1 }),
+      el('input', { type: 'number', min: 0, step: '0.01', placeholder: '0.00' }),
+      el('button', { textContent: '✕', title: 'Remove line', onclick: () => { if ($('newLines').children.length > 1) row.remove(); } }));
+    $('newLines').append(row);
+  }
+  $('addLineBtn').onclick = addNewLine;
+  $('submitOrderBtn').onclick = async () => {
+    $('newErr').textContent = '';
+    const btn = $('submitOrderBtn'); btn.disabled = true;
+    try {
+      const account = $('nAccount').value.trim(), orderRef = $('nRef').value.trim(), notes = $('nNotes').value.trim();
+      if (!account) throw new Error('Account is required');
+      if (!orderRef) throw new Error('Order reference is required');
+      if (account.length > 200 || orderRef.length > 100 || notes.length > 1000) throw new Error('A field is too long');
+      const lines = [...$('newLines').children].map((r) => {
+        const i = r.querySelectorAll('input');
+        return parseLine({ partNumber: i[0].value, description: i[1].value, qty: i[2].value, unitCost: i[3].value });
+      });
+      const { error } = await sb.rpc('create_back_order', { p_account: account, p_order_ref: orderRef, p_notes: notes, p_lines: lines });
+      if (error) throw fail(error);
+      ['nAccount', 'nRef', 'nNotes'].forEach((id) => ($(id).value = ''));
+      $('newLines').innerHTML = ''; addNewLine();
+      toast('Back order logged');
+      if ($('statusFilter').value === 'completed') $('statusFilter').value = 'open';
+      load();
+    } catch (e) { $('newErr').textContent = e.message; }
+    btn.disabled = false;
+  };
+
+  // ---------- Table ----------
+  async function load() {
+    try {
+      const f = $('statusFilter').value;
+      let q = sb.from('back_orders').select('*, product_lines!inner(*)');
+      if (f === 'open') q = q.in('product_lines.status', ['TO BE ORDERED', 'ORDERED']);
+      if (f === 'completed') q = q.eq('product_lines.status', 'COMPLETED');
+      const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+      if (error) throw fail(error);
+      orders = data || [];
+      render();
+    } catch (e) { toast(e.message, true); }
+  }
+  $('statusFilter').onchange = load;
+  $('search').oninput = render;
+
+  const BADGE = { 'TO BE ORDERED': 's-TO', 'ORDERED': 's-OR', 'COMPLETED': 's-CO' };
+  const COLS = { partNumber: 'part_number', description: 'description', qty: 'qty', unitCost: 'unit_cost', status: 'status' };
+
+  async function patchLine(id, field, value) {
+    try {
+      const patch = {};
+      if (field === 'status') patch.status = value;
+      else {
+        // validate the single edited field using the same rules as new lines
+        const probe = { partNumber: 'x', description: '', qty: 1, unitCost: 0, [field]: value };
+        patch[COLS[field]] = parseLine(probe)[COLS[field]];
+      }
+      const { data, error } = await sb.from('product_lines').update(patch).eq('id', id).select().maybeSingle();
+      if (error) throw fail(error);
+      if (!data) throw new Error('Not saved: you may not have permission, or the line no longer exists.');
+      toast('Saved'); await load();
+    } catch (e) { toast(e.message, true); load(); }
+  }
+  async function del(table, id, what) {
+    if (!confirm('Delete ' + what + '? This cannot be undone.')) return;
+    try {
+      const { data, error } = await sb.from(table).delete().eq('id', id).select('id');
+      if (error) throw fail(error);
+      if (!data || !data.length) throw new Error('Nothing was deleted: you may not have permission.');
+      toast('Deleted'); load();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  function render() {
+    const q = $('search').value.trim().toLowerCase();
+    const body = $('rows'); body.innerHTML = '';
+    let n = 0;
+    for (const o of orders) {
+      const lines = (o.product_lines || []).filter((l) =>
+        !q || [o.account, o.order_ref, l.part_number, l.description].join(' ').toLowerCase().includes(q));
+      lines.forEach((l, idx) => {
+        n++;
+        const tr = el('tr', { className: idx === 0 ? 'order-start' : '' });
+        const cell = (v) => el('td', { textContent: v });
+        const input = (field, val, cls = '', type = 'text') => el('td', { className: cls === 'n' ? 'num' : '' },
+          el('input', { value: val ?? '', type, className: cls, step: type === 'number' ? (field === 'unitCost' ? '0.01' : '1') : undefined, min: type === 'number' ? 0 : undefined,
+            onchange: (e) => patchLine(l.id, field, e.target.value) }));
+
+        tr.append(idx === 0 ? cell(o.account) : cell(''), idx === 0 ? cell(o.order_ref) : cell(''));
+        if (editing) {
+          tr.append(input('partNumber', l.part_number), input('description', l.description),
+            input('qty', l.qty, 'n', 'number'), input('unitCost', Number(l.unit_cost).toFixed(2), 'n', 'number'));
+        } else {
+          tr.append(cell(l.part_number), cell(l.description || ''),
+            el('td', { className: 'num', textContent: l.qty }), el('td', { className: 'num', textContent: gbp.format(l.unit_cost) }));
+        }
+        tr.append(el('td', { className: 'num', textContent: gbp.format(l.qty * l.unit_cost) }));
+
+        if (editing) {
+          const sel = el('select', { onchange: (e) => patchLine(l.id, 'status', e.target.value) },
+            ['TO BE ORDERED', 'ORDERED', 'COMPLETED'].map((s) => el('option', { value: s, textContent: s, selected: s === l.status })));
+          tr.append(el('td', {}, sel));
+        } else {
+          tr.append(el('td', {}, el('span', { className: 'badge ' + BADGE[l.status], textContent: l.status })));
+        }
+        tr.append(idx === 0 ? cell(o.created_by) : cell(''), idx === 0 ? cell(fmtDate(o.created_at)) : cell(''));
+
+        if (editing) {
+          const act = el('td', { style: 'white-space:nowrap' });
+          act.append(el('button', { className: 'danger', textContent: 'Delete line', onclick: () => del('product_lines', l.id, 'this line') }));
+          if (idx === 0) act.append(' ', el('button', { className: 'danger', textContent: 'Delete order', onclick: () => del('back_orders', o.id, 'the whole order "' + o.order_ref + '"') }));
+          tr.append(act);
+        }
+        body.append(tr);
+      });
+    }
+    $('empty').hidden = n > 0;
+    $('count').textContent = n + ' line' + (n === 1 ? '' : 's');
+  }
+
+  // ---------- Wire up ----------
+  $('loginBtn').onclick = login;
+  $('lp').addEventListener('keydown', (e) => e.key === 'Enter' && login());
+  $('le').addEventListener('keydown', (e) => e.key === 'Enter' && $('lp').focus());
+  $('logoutBtn').onclick = signOut;
+  // Sync tabs: if the session ends elsewhere, drop back to login. (No Supabase calls in this callback.)
+  sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') showLogin(); });
+
+  (async () => {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) await enter(data.session.user); else showLogin();
+  })();
+})();
+</script>
+</body>
+</html>

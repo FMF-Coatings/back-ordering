@@ -136,6 +136,29 @@
   .s-TO { background: #fdecec; color: #b92f2f; } .s-OR { background: #fef5e7; color: var(--amber); } .s-CO { background: #e8f8f0; color: #0b5d3a; }
   .empty { padding: 28px; text-align: center; color: var(--text-muted); }
 
+  /* phones: read-only lines become cards (edit view keeps the table) */
+  @media (max-width: 760px) {
+    main { padding: 12px 10px 32px; }
+    .card { padding: 14px; }
+    .header-inner { padding: 10px 12px; }
+    .tablewrap { border: none; background: none; overflow: visible; border-radius: 0; }
+    table:not(.editing), table:not(.editing) tbody { display: block; }
+    table:not(.editing) thead { display: none; }
+    table:not(.editing) tr { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px 12px; background: #fff; border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+    table:not(.editing) td, table:not(.editing) td:last-child:not([hidden]) { display: block; padding: 0; border: none; white-space: normal; position: static; box-shadow: none; background: transparent; min-width: 0; overflow-wrap: anywhere; text-align: left; }
+    table:not(.editing) td:empty { display: none; }
+    table:not(.editing) td::before { content: attr(data-label); display: block; font-size: 0.66rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1px; }
+    table:not(.editing) td:nth-child(-n+4) { grid-column: span 3; }
+    table:not(.editing) td:nth-child(5), table:not(.editing) td:nth-child(9) { grid-column: span 6; }
+    table:not(.editing) td:nth-child(6), table:not(.editing) td:nth-child(7), table:not(.editing) td:nth-child(8) { grid-column: span 2; }
+    table:not(.editing) td:nth-child(n+10) { grid-column: span 3; }
+    table:not(.editing) td:nth-child(1) { font-weight: 700; }
+    table:not(.editing) td[data-label=""] { grid-column: span 6; }
+    table:not(.editing) td[data-label=""]::before { display: none; }
+    table:not(.editing) td .badge { margin-top: 2px; }
+    #exportBtn, #usersBtn { display: none !important; }
+  }
+
   /* toast */
   #toast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 20px; border-radius: 10px; display: none;
     font-weight: 600; font-size: 0.95rem; z-index: 900; max-width: 90vw; text-align: center; box-shadow: 0 8px 28px rgba(0,0,0,0.25); }
@@ -742,6 +765,9 @@
           anyAction = true; act.append(el('button', { className: 'danger', textContent: 'Delete line', onclick: () => delLine(l.id) }));
         }
         tr.append(act);
+        const labels = ['Account no', 'Account name', 'Order no', 'Part no', 'Description', 'Qty', 'Unit cost', 'Unit price', 'Notes', 'Status', 'Raised by']
+          .concat(isViewer() ? [] : ['Sales rep']).concat(['Raised', '']);
+        [...tr.children].forEach((td, i) => td.setAttribute('data-label', labels[i] || ''));
         body.append(tr);
       });
     }

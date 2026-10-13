@@ -318,7 +318,7 @@
           el('input', { value: val ?? '', type, className: cls, step: type === 'number' ? (field === 'unitCost' ? '0.01' : '1') : undefined, min: type === 'number' ? 0 : undefined,
             onchange: (e) => patchLine(l.id, field, e.target.value) }));
 
-        tr.append(idx === 0 ? cell(o.account) : cell(''), idx === 0 ? cell(o.order_ref) : cell(''));
+        tr.append(cell(o.account), cell(o.order_ref));
         if (editing) {
           tr.append(input('partNumber', l.part_number), input('description', l.description),
             input('qty', l.qty, 'n', 'number'), input('unitCost', Number(l.unit_cost).toFixed(2), 'n', 'number'));
@@ -335,12 +335,11 @@
         } else {
           tr.append(el('td', {}, el('span', { className: 'badge ' + BADGE[l.status], textContent: l.status })));
         }
-        tr.append(idx === 0 ? cell(o.created_by) : cell(''), idx === 0 ? cell(fmtDate(o.created_at)) : cell(''));
+        tr.append(cell(o.created_by), cell(fmtDate(o.created_at)));
 
         if (editing) {
           const act = el('td', { style: 'white-space:nowrap' });
           act.append(el('button', { className: 'danger', textContent: 'Delete line', onclick: () => del('product_lines', l.id, 'this line') }));
-          if (idx === 0) act.append(' ', el('button', { className: 'danger', textContent: 'Delete order', onclick: () => del('back_orders', o.id, 'the whole order "' + o.order_ref + '"') }));
           tr.append(act);
         }
         body.append(tr);

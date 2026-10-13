@@ -115,6 +115,7 @@
   .tablewrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: 12px; background: #fff; }
   table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
   th { background: var(--off-white); text-align: left; padding: 11px 12px; font-weight: 700; font-size: 0.82rem; color: var(--brand); border-bottom: 2px solid var(--border); white-space: nowrap; }
+  td.nowrap { white-space: nowrap; }
   td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: #f8fbff; }
@@ -313,6 +314,7 @@
   let orders = [];
 
   const gbp = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+  const fmtShort = (s) => new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'Europe/London' });
   const fmtDate = (s) => new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const el = (tag, props = {}, ...kids) => {
     const e = document.createElement(tag);
@@ -689,7 +691,7 @@
           if (archived) st.append(el('div', { className: 'small muted', textContent: 'Exported ' + fmtDate(l.archived_at) }));
           tr.append(st);
         }
-        tr.append(cell(o.created_by), cell(fmtDate(o.created_at)));
+        tr.append(cell(o.created_by), cell(fmtShort(o.created_at), 'nowrap'));
 
         const act = el('td', { style: 'white-space:nowrap' });
         if (archived) {

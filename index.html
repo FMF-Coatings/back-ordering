@@ -58,6 +58,7 @@
   table.um td, table.um th { position: static; box-shadow: none; }
   .um-wrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: 12px; }
 
+  .caps { text-transform: uppercase; } .caps::placeholder { text-transform: none; }
   tr.pending td { background: #fff8e6 !important; }
   tr.pending td:first-child { box-shadow: inset 4px 0 0 #f5b041; }
   .pending-bar { background: #fff3d6; border: 1.5px solid #f5b041; color: #5e4300; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-weight: 600; font-size: 0.92rem; }
@@ -191,9 +192,9 @@
     <section class="card">
       <div class="card-label">New back order<span class="req-note"><span class="req">*</span> required</span></div>
       <div class="grid">
-        <div class="field"><label for="nAccount">Account <span class="req">*</span></label><input id="nAccount"></div>
-        <div class="field"><label for="nRef">Order reference <span class="req">*</span></label><input id="nRef"></div>
-        <div class="field"><label for="nNotes">Order notes</label><input id="nNotes" placeholder="Applies to the whole back order"></div>
+        <div class="field"><label for="nAccount">Account <span class="req">*</span></label><input id="nAccount" class="caps"></div>
+        <div class="field"><label for="nRef">Order reference <span class="req">*</span></label><input id="nRef" class="caps"></div>
+        <div class="field"><label for="nNotes">Order notes</label><input id="nNotes" class="caps" placeholder="Applies to the whole back order"></div>
       </div>
       <div class="lines-form" style="margin-top:12px">
         <div class="ln hdr muted"><span>Part number <span class="req">*</span></span><span>Description <span class="req">*</span></span><span>Qty <span class="req">*</span></span><span>Unit cost £</span><span>Unit price £</span><span>Line notes</span><span></span></div>
@@ -408,9 +409,20 @@
     if (editing && pending.size) { openPendingModal(); return; }      // unsaved status changes: confirm first
     editing = !editing; renderMode(); toast(editing ? 'Edit view on' : 'Edit view off'); };
 
+  // Anything typed into a text data field (class "caps") is turned into capitals as it is typed.
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (!t.classList || !t.classList.contains('caps') || t.tagName !== 'INPUT') return;
+    const up = t.value.toUpperCase();
+    if (up === t.value) return;
+    const a = t.selectionStart, b = t.selectionEnd;
+    t.value = up;
+    try { t.setSelectionRange(a, b); } catch (err) { /* not supported on this input type */ }
+  });
+
   // ---------- Validation (mirrors the database rules; the database is the final check) ----------
   const text = (label, max, required) => (v) => {
-    const s = String(v ?? '').trim();
+    const s = String(v ?? '').trim().toUpperCase();          // all text data is stored in capitals
     if (required && !s) throw new Error(label + ' is required');
     if (s.length > max) throw new Error(label + ' is too long (' + max + ' characters max)');
     return required ? s : (s || null);
@@ -451,11 +463,11 @@
   // ---------- New order form ----------
   function addNewLine() {
     const row = el('div', { className: 'ln' },
-      el('input', { placeholder: 'Part no' }), el('input', { placeholder: 'Description' }),
+      el('input', { className: 'caps', placeholder: 'Part no' }), el('input', { className: 'caps', placeholder: 'Description' }),
       el('input', { type: 'number', min: 1, step: 1, value: 1, title: 'Quantity', placeholder: 'Qty' }),
       el('input', { type: 'number', min: 0, step: '0.01', placeholder: 'Cost 0.00', title: 'Unit cost £' }),
       el('input', { type: 'number', min: 0, step: '0.01', placeholder: 'Price 0.00', title: 'Unit price £' }),
-      el('input', { placeholder: 'Notes for this line' }),
+      el('input', { className: 'caps', placeholder: 'Notes for this line' }),
       el('button', { textContent: '✕', title: 'Remove line', onclick: () => { if ($('newLines').children.length > 1) row.remove(); } }));
     $('newLines').append(row);
   }
@@ -622,7 +634,7 @@
         const edit = editing && !archived;           // archived lines are a record of what was exported: read-only
         const tr = el('tr', { className: idx === 0 ? 'order-start' : '' });
         const cell = (v, cls = '') => el('td', { textContent: v, className: cls });
-        const tIn = (val, onSave, ph) => el('input', { value: val ?? '', type: 'text', className: 't', placeholder: ph, onchange: (e) => onSave(e.target.value) });
+        const tIn = (val, onSave, ph) => el('input', { value: val ?? '', type: 'text', className: 't caps', placeholder: ph, onchange: (e) => onSave(e.target.value) });
         const nIn = (val, onSave, step) => el('input', { value: val, type: 'number', className: 'n', step, min: 0, onchange: (e) => onSave(e.target.value) });
         const line = (fld) => (v) => patchLine(l.id, fld, v);
         const order = (fld) => (v) => patchOrder(o.id, fld, v);
@@ -636,11 +648,11 @@
             el('td', { className: 'num' }, nIn(money2(l.unit_cost), line('unitCost'), '0.01')),
             el('td', { className: 'num' }, nIn(money2(l.unit_price), line('unitPrice'), '0.01')));
         } else {
-          tr.append(cell(o.account), cell(o.order_ref), cell(l.part_number), cell(l.description || ''),
+          tr.append(cell(o.account, 'caps'), cell(o.order_ref, 'caps'), cell(l.part_number, 'caps'), cell(l.description || '', 'caps'),
             cell(l.qty, 'num'), cell(gbp.format(l.unit_cost), 'num'), cell(gbp.format(l.unit_price), 'num'));
         }
 
-        const notes = el('td', { className: 'notes' });
+        const notes = el('td', { className: 'notes caps' });
         if (edit) {
           notes.append(tIn(o.notes, order('orderNotes'), 'Order note (whole order)'), tIn(l.notes, line('notes'), 'Line note'));
         } else {
@@ -654,12 +666,12 @@
           const curStatus = p ? p.status : l.status, curNote = p ? p.note : (l.status_note || '');
           const sel = el('select', { onchange: (e) => stage(o, l, { status: e.target.value }) },
             ['TO BE ORDERED', 'ORDERED', 'COMPLETED'].map((s) => el('option', { value: s, textContent: s, selected: s === curStatus })));
-          const noteIn = el('input', { value: curNote, type: 'text', placeholder: 'Ordering note, e.g. OOS at supplier', maxLength: 200, title: 'Ordering note (saved with the status)', onchange: (e) => stage(o, l, { note: e.target.value }) });
+          const noteIn = el('input', { value: curNote, type: 'text', className: 'caps', placeholder: 'Ordering note, e.g. OOS at supplier', maxLength: 200, title: 'Ordering note (saved with the status)', onchange: (e) => stage(o, l, { note: e.target.value }) });
           tr.append(el('td', { className: 'statuscell' }, sel, curStatus === 'ORDERED' ? noteIn : []));
           if (p) tr.classList.add('pending');
         } else {
           const st = el('td', {}, el('span', { className: 'badge ' + BADGE[l.status], textContent: l.status }));
-          if (l.status_note && l.status === 'ORDERED') st.append(el('div', { className: 'status-note', textContent: l.status_note }));
+          if (l.status_note && l.status === 'ORDERED') st.append(el('div', { className: 'status-note caps', textContent: l.status_note }));
           if (archived) st.append(el('div', { className: 'small muted', textContent: 'Exported ' + fmtDate(l.archived_at) }));
           tr.append(st);
         }

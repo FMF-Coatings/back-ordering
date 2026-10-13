@@ -123,6 +123,11 @@
   td input { width: 100%; padding: 8px 10px; font-size: 0.92rem; border-radius: 8px; } td input.n { text-align: right; min-width: 78px; }
   td input.t { min-width: 150px; } td select { padding: 8px 10px; font-size: 0.88rem; border-radius: 8px; min-width: 130px; }
   td.notes { min-width: 180px; } td.notes input + input { margin-top: 4px; }
+  /* edit view: tighter cells so every input gets a usable width and the Sales rep column is not squashed */
+  table.editing th, table.editing td { padding-left: 6px; padding-right: 6px; }
+  table.editing td input.n { min-width: 70px; }
+  table.editing td.statuscell input, table.editing td select { min-width: 150px; }
+  table.editing td.notes { min-width: 190px; }
   .order-start td { border-top: 2px solid var(--border); }
   tbody tr.order-start:first-child td { border-top: none; }
   th:last-child:not([hidden]), td:last-child:not([hidden]) { position: sticky; right: 0; background: #fff; box-shadow: -8px 0 8px -8px rgba(13,27,42,0.25); }
@@ -225,7 +230,7 @@
         <button id="purgeBtn" class="secondary danger" hidden>Purge all archived lines…</button>
       </div>
       <div class="pending-bar" id="pendingBar" hidden></div>
-      <div class="tablewrap"><table>
+      <div class="tablewrap"><table id="tbl">
         <thead><tr>
           <th>Account number</th><th>Account name</th><th>Order number</th><th>Part no</th><th>Description</th>
           <th class="num">Qty</th><th class="num">Unit cost £</th><th class="num">Unit price £</th>
@@ -667,6 +672,7 @@
     const f = $('statusFilter').value;
     const q = $('search').value.trim().toLowerCase();
     const body = $('rows'); body.innerHTML = '';
+    $('tbl').classList.toggle('editing', editing);
     let n = 0, anyAction = false;
     for (const o of orders) {
       const lines = [...(o.product_lines || [])].sort(lineSort).filter((l) =>
@@ -677,7 +683,7 @@
         const edit = editing && !archived;           // archived lines are a record of what was exported: read-only
         const tr = el('tr', { className: idx === 0 ? 'order-start' : '' });
         const cell = (v, cls = '') => el('td', { textContent: v, className: cls });
-        const tIn = (val, onSave, ph) => el('input', { value: val ?? '', type: 'text', className: 't caps', placeholder: ph, onchange: (e) => onSave(e.target.value) });
+        const tIn = (val, onSave, ph, w) => el('input', { value: val ?? '', type: 'text', className: 't caps', placeholder: ph || '', style: w ? 'min-width:' + w + 'px' : '', onchange: (e) => onSave(e.target.value) });
         const nIn = (val, onSave, step) => el('input', { value: val, type: 'number', className: 'n', step, min: 0, onchange: (e) => onSave(e.target.value) });
         const line = (fld) => (v) => patchLine(l.id, fld, v);
         const order = (fld) => (v) => patchOrder(o.id, fld, v);
@@ -685,8 +691,8 @@
 
         if (edit) {
           tr.append(
-            el('td', {}, tIn(o.account, order('account'))), el('td', {}, tIn(o.account_name, order('accountName'))), el('td', {}, tIn(o.order_ref, order('orderRef'))),
-            el('td', {}, tIn(l.part_number, line('partNumber'))), el('td', {}, tIn(l.description, line('description'))),
+            el('td', {}, tIn(o.account, order('account'), '', 100)), el('td', {}, tIn(o.account_name, order('accountName'), 'Account name', 150)), el('td', {}, tIn(o.order_ref, order('orderRef'), '', 100)),
+            el('td', {}, tIn(l.part_number, line('partNumber'), '', 120)), el('td', {}, tIn(l.description, line('description'), '', 180)),
             el('td', { className: 'num' }, nIn(l.qty, line('qty'), '1')),
             el('td', { className: 'num' }, nIn(money2(l.unit_cost), line('unitCost'), '0.01')),
             el('td', { className: 'num' }, nIn(money2(l.unit_price), line('unitPrice'), '0.01')));
@@ -697,7 +703,7 @@
 
         const notes = el('td', { className: 'notes caps' });
         if (edit) {
-          notes.append(tIn(o.notes, order('orderNotes'), 'Order note (whole order)'), tIn(l.notes, line('notes'), 'Line note'));
+          notes.append(tIn(o.notes, order('orderNotes'), 'Order note (all lines)'), tIn(l.notes, line('notes'), 'Line note'));
         } else {
           if (o.notes) notes.append(el('div', { className: 'small muted', textContent: 'Order: ' + o.notes }));
           if (l.notes) notes.append(el('div', { className: 'small', textContent: 'Line: ' + l.notes }));
@@ -718,13 +724,13 @@
           if (archived) st.append(el('div', { className: 'small muted', textContent: 'Exported ' + fmtDate(l.archived_at) }));
           tr.append(st);
         }
-        tr.append(cell(o.created_by));
+        tr.append(cell(o.created_by, 'nowrap'));
         if (!isViewer()) {
           if (edit) {
             const opts = [el('option', { value: '', textContent: 'Not assigned', selected: !o.assigned_to })];
             if (o.assigned_to && !reps.some((r) => r.id === o.assigned_to)) opts.push(el('option', { value: o.assigned_to, textContent: repName(o.assigned_to), selected: true }));
             reps.forEach((r) => opts.push(el('option', { value: r.id, textContent: r.display_name, selected: r.id === o.assigned_to })));
-            tr.append(el('td', {}, el('select', { title: 'Sales rep (applies to every line of the order)', onchange: (e) => patchOrder(o.id, 'assignedTo', e.target.value) }, opts)));
+            tr.append(el('td', {}, el('select', { style: 'min-width:150px', title: 'Sales rep (applies to every line of the order)', onchange: (e) => patchOrder(o.id, 'assignedTo', e.target.value) }, opts)));
           } else tr.append(cell(repName(o.assigned_to)));
         }
         tr.append(cell(fmtShort(o.created_at), 'nowrap'));

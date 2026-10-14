@@ -110,6 +110,9 @@
   .toolbar input { width: auto; padding: 11px 14px; font-size: 0.95rem; }
   .muted { color: var(--text-muted); } .small { font-size: 0.8rem; }
   #count { font-size: 0.85rem; }
+  .refresh-box { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .refresh-box button { padding: 6px 12px; font-size: 0.8rem; }
+  .refresh-box .rf-fail { color: var(--error); }
 
   /* table */
   .tablewrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: 12px; background: #fff; }
@@ -267,6 +270,10 @@
         </select>
         <input id="search" placeholder="Search account, order no, part, sales rep, notes…" style="flex:1;min-width:200px">
         <span class="muted" id="count"></span>
+        <span class="refresh-box" id="refreshBox" hidden>
+          <span class="muted small" id="refreshText" aria-live="off"></span>
+          <button id="refreshBtn" class="secondary" type="button" title="Reload the back order lines now">Refresh now</button>
+        </span>
         <button id="purgeBtn" class="secondary danger" hidden>Purge all archived lines…</button>
       </div>
       <div class="hint" id="tapHint">Tap a line for cost, notes and dates.</div>
@@ -627,7 +634,10 @@
   window.addEventListener('beforeunload', (e) => { if (pending.size) { e.preventDefault(); e.returnValue = ''; } });
 
   // ---------- Table ----------
-  async function load() {
+  let loadSeq = 0, lastLoadOk = 0, lastLoadFailed = false;
+  async function load(quiet) {
+    quiet = quiet === true;                       // load is also used as an event handler, so only an explicit true counts
+    const seq = ++loadSeq;
     try {
       const f = $('statusFilter').value;
       let q = sb.from('back_orders').select('*, product_lines!inner(*)');
@@ -639,10 +649,59 @@
       const asc = sortDir === 'asc';
       const { data, error } = await q.order('created_at', { ascending: asc }).order('id', { ascending: asc }).limit(500);
       if (error) throw fail(error);
+      if (seq !== loadSeq || !profile) return false;                          // a newer load started, or the user signed out
       orders = data || [];
+      lastLoadOk = Date.now(); lastLoadFailed = false; nextRefreshAt = lastLoadOk + AUTO_REFRESH_MS;
       render();
-    } catch (e) { toast(e.message, true); }
+      return true;
+    } catch (e) {
+      if (seq === loadSeq) lastLoadFailed = true;
+      if (!quiet) toast(e.message, true);
+      return false;
+    }
   }
+
+  // ---------- Manager auto-refresh ----------
+  // Managers get the lines refreshed every 5 minutes. Not while in edit view; not while the tab is hidden.
+  // This never touches the idle-logout timer: only real mouse/key/touch events do.
+  const AUTO_REFRESH_MS = 5 * 60 * 1000;
+  let nextRefreshAt = Date.now() + AUTO_REFRESH_MS, refreshBusy = false, wasEditing = false;
+  async function autoRefresh() {
+    if (refreshBusy) return;
+    refreshBusy = true; refreshTick();
+    try { await load(true); } finally { refreshBusy = false; nextRefreshAt = Date.now() + AUTO_REFRESH_MS; refreshTick(); }
+  }
+  function refreshTick() {
+    const box = $('refreshBox');
+    const on = !!profile && isEditor();
+    box.hidden = !on;
+    if (!on) { wasEditing = false; return; }
+    const txt = $('refreshText');
+    const hidden = document.visibilityState === 'hidden';
+    if (editing) wasEditing = true;
+    let status;
+    if (refreshBusy) status = 'Refreshing\u2026';
+    else if (editing) status = 'Auto-refresh paused in edit view';
+    else if (hidden) status = 'Auto-refresh paused';
+    else status = 'Next refresh in ' + Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000)) + 's';
+    const t = lastLoadOk ? 'Updated ' + new Date(lastLoadOk).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' \u00b7 ' : '';
+    txt.textContent = t + status;
+    if (lastLoadFailed) { const f = document.createElement('span'); f.className = 'rf-fail'; f.textContent = ' \u00b7 Last refresh failed'; txt.append(f); }
+    $('refreshBtn').disabled = refreshBusy;
+    if (editing || hidden || refreshBusy) return;
+    if (wasEditing) {                              // edit view just locked: refresh straight away (unless a save just did)
+      wasEditing = false;
+      if (Date.now() - lastLoadOk > 3000) { autoRefresh(); return; }
+      nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
+    }
+    if (Date.now() >= nextRefreshAt) autoRefresh();
+  }
+  setInterval(refreshTick, 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && profile && isEditor() && !editing) autoRefresh();   // catch up on return
+    else refreshTick();
+  });
+  $('refreshBtn').onclick = () => { if (isEditor() && !editing) autoRefresh(); };
   // Sort by the Raised date. Newest first by default; click the header to flip. The database does the sorting
   // (not the browser) so that, with more than 500 back orders, "oldest first" really starts at the oldest.
   let sortDir = 'desc';

@@ -33,16 +33,16 @@ Roles are enforced by the database (Row Level Security), not by the page.
 ## Repository layout
 
 ```
-index.html                                  Web app
-supabase/schema.sql                         Database: tables, functions, triggers, RLS, grants
-supabase/functions/manage-users/index.ts    Edge Function for user management
+index.html    Web app
+schema.sql    Database: tables, functions, triggers, RLS, grants
+index.ts      Source of the manage-users Edge Function (deployed in Supabase)
 README.md
 ```
 
 ## Making changes
 
-1. Run any database change from `supabase/schema.sql` in the Supabase SQL Editor.
-2. Deploy the `manage-users` function if it changed.
+1. Run any database change from `schema.sql` in the Supabase SQL Editor.
+2. Deploy the `manage-users` function (`index.ts`) if it changed.
 3. Commit `index.html` to `main`. GitHub Pages publishes it.
 4. Hard refresh (Ctrl+F5) and test as a Submitter, a Viewer and a Manager.
 

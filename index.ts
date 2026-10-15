@@ -1,5 +1,5 @@
 // Supabase Edge Function: manage-users
-// Lets a signed-in MANAGER (profiles.role = 'editor') list, add, re-role, reset the password of, and delete users.
+// Lets a signed-in MANAGER (profiles.role = 'editor') list, add, re-role, flag as sales rep, reset the password of, and delete users.
 //
 // WHY THIS EXISTS: creating and deleting logins needs the service_role key, which must never be in the website.
 // Supabase injects that key into Edge Functions automatically, so it stays on Supabase's servers.
@@ -68,12 +68,12 @@ Deno.serve(async (req) => {
         users.push(...data.users);
         if (data.users.length < 1000) break;
       }
-      const { data: profiles, error } = await admin.from('profiles').select('id, display_name, role');
+      const { data: profiles, error } = await admin.from('profiles').select('id, display_name, role, is_sales_rep');
       if (error) throw error;
       const byId = new Map((profiles || []).map((p) => [p.id, p]));
       const out = users.map((u) => {
         const p = byId.get(u.id);
-        return { id: u.id, email: u.email, display_name: p?.display_name ?? null, role: p?.role ?? null, last_sign_in_at: u.last_sign_in_at ?? null };
+        return { id: u.id, email: u.email, display_name: p?.display_name ?? null, role: p?.role ?? null, is_sales_rep: !!p?.is_sales_rep, last_sign_in_at: u.last_sign_in_at ?? null };
       }).sort((a, b) => String(a.display_name ?? a.email).localeCompare(String(b.display_name ?? b.email)));
       return json({ users: out, me: me.id });
     }
@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
       const email = String(body.email || '').trim().toLowerCase();
       const name = String(body.display_name || '').trim();
       const role = String(body.role || 'viewer');
+      const isSalesRep = body.is_sales_rep === true;
       if (!EMAIL_RE.test(email) || email.length > 254) throw new Refusal('Username is not valid');
       if (name.length < 1 || name.length > 100) throw new Refusal('Name is required (100 characters max)');
       if (!ROLES.includes(role)) throw new Refusal('Bad role');
@@ -91,7 +92,7 @@ Deno.serve(async (req) => {
         if (error && (/already|exists|registered/i.test(error.message) || (error as any).code === 'email_exists')) throw new Refusal('That username is already taken', 409);
         throw error || new Error('Could not create the user');
       }
-      const { error: pErr } = await admin.from('profiles').insert({ id: data.user.id, display_name: name, role });
+      const { error: pErr } = await admin.from('profiles').insert({ id: data.user.id, display_name: name, role, is_sales_rep: isSalesRep });
       if (pErr) {                                   // never leave a login that has no profile half-created
         await admin.auth.admin.deleteUser(data.user.id);
         throw pErr;
@@ -116,6 +117,17 @@ Deno.serve(async (req) => {
         const { error } = await admin.from('profiles').insert({ id, display_name: nm, role });
         if (error) throw error;
       }
+      return json({ ok: true });
+    }
+
+    if (action === 'set_sales_rep') {
+      // Whether this person appears in the Sales rep dropdown. (Viewers always do, whatever this says.)
+      const id = validId(body.id);
+      if (typeof body.value !== 'boolean') throw new Refusal('Bad value');
+      const { data: target } = await admin.from('profiles').select('id').eq('id', id).maybeSingle();
+      if (!target) throw new Refusal('That user has no access set up yet. Give them a role first', 404);
+      const { error } = await admin.from('profiles').update({ is_sales_rep: body.value }).eq('id', id);
+      if (error) throw error;
       return json({ ok: true });
     }
 

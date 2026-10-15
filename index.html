@@ -46,10 +46,20 @@
   .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   .modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.3rem; font-weight: 800; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
   .modal-close { background: none; border: none; font-size: 1.6rem; line-height: 1; color: var(--text-muted); padding: 4px 8px; }
-  .um-add { display: grid; grid-template-columns: 1.1fr 1fr 1.9fr 0.8fr auto; gap: 10px; align-items: end; margin-bottom: 8px; }
+  /* Manage users: a full-screen page that covers the app (not a pop-up box) */
+  .um-screen { position: fixed; inset: 0; z-index: 800; background: var(--off-white); display: none; overflow-y: auto; }
+  .um-screen.open { display: block; }
+  .um-bar { position: sticky; top: 0; z-index: 2; background: var(--brand); box-shadow: 0 2px 16px rgba(0,0,0,0.18); display: flex; align-items: center; gap: 14px; padding: 12px 20px; flex-wrap: wrap; }
+  .um-bar .um-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; letter-spacing: 0.04em; text-transform: uppercase; }
+  .um-body { padding: 24px 20px 48px; width: 100%; }
+  .um-body .card { margin-bottom: 16px; }
+  .um-add { display: grid; grid-template-columns: 1.1fr 1fr 1.9fr 0.9fr auto auto; gap: 10px; align-items: end; margin-bottom: 8px; }
   .um-add .field { min-width: 0; }
+  .um-check { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.9rem; margin: 0; padding: 13px 0; white-space: nowrap; cursor: pointer; }
+  .um-check input { width: 20px; height: 20px; padding: 0; margin: 0; accent-color: var(--brand); }
+  td.um-rep input { width: 20px; height: 20px; padding: 0; accent-color: var(--brand); cursor: pointer; vertical-align: middle; }
   .um-pass { display: flex; gap: 6px; } .um-pass input { min-width: 0; flex: 1; } .um-pass button { white-space: nowrap; }
-  @media (max-width: 760px) { .um-add { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 760px) { .um-add { grid-template-columns: 1fr 1fr; } .um-body { padding: 12px 8px 28px; } }
   .hint { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 14px; }
   .info-box { padding: 12px 14px; border-radius: 10px; font-size: 0.92rem; line-height: 1.45; margin: 12px 0; background: #e8f8f0; border: 1.5px solid #a9e3c8; color: #0b5d3a; overflow-wrap: anywhere; }
   .info-box code { background: #fff; font-weight: 700; }
@@ -246,7 +256,7 @@
         <div class="field"><label for="nAccountName">Account Name</label><input id="nAccountName" class="caps"></div>
         <div class="field"><label for="nRef">Order Number <span class="req">*</span></label><input id="nRef" class="caps"></div>
         <div class="field"><label for="nNotes">Order notes</label><input id="nNotes" class="caps" placeholder="Applies to the whole back order"></div>
-        <div class="field"><label for="nRep">Sales rep (optional)</label><select id="nRep"><option value="">Not assigned</option></select></div>
+        <div class="field"><label for="nRep">Sales rep <span class="req">*</span></label><select id="nRep"><option value="">Select sales rep…</option><option value="__none">Not assigned</option></select></div>
       </div>
       <div class="lines-form" style="margin-top:12px">
         <div class="ln hdr muted"><span>Part number <span class="req">*</span></span><span>Description <span class="req">*</span></span><span>Qty <span class="req">*</span></span><span>Unit cost £</span><span>Unit price £</span><span>Line notes</span><span></span></div>
@@ -293,9 +303,13 @@
 </div>
 
 <!-- USER MANAGEMENT (managers, in edit view) -->
-<div class="modal-backdrop" id="usersModal">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="umTitle">
-    <div class="modal-head"><div class="modal-title" id="umTitle">Manage users</div><button class="modal-close" id="umClose" aria-label="Close">&times;</button></div>
+<div class="um-screen" id="usersModal" role="dialog" aria-modal="true" aria-labelledby="umTitle">
+  <div class="um-bar">
+    <button class="pill-btn" id="umClose" type="button">&larr; Back to back orders</button>
+    <div class="um-title" id="umTitle">Manage users</div>
+  </div>
+  <div class="um-body">
+  <section class="card">
     <div class="card-label">Add a user</div>
     <div class="um-add">
       <div class="field"><label for="umName">Name <span class="req">*</span></label><input id="umName" maxlength="100" autocomplete="off" placeholder="Jack Thompson"></div>
@@ -303,16 +317,20 @@
       <div class="field"><label for="umPass">Password <span class="req">*</span></label>
         <div class="um-pass"><input id="umPass" maxlength="72" autocomplete="new-password" placeholder="6+ characters"><button class="secondary" id="umGen" type="button" title="Generate a password">Generate</button></div></div>
       <div class="field"><label for="umRole">Role</label><select id="umRole"><option value="submitter">Submitter</option><option value="viewer">Viewer (sales rep)</option><option value="editor">Manager</option></select></div>
+      <div class="field"><label class="um-check" for="umRep" title="Tick if this person looks after customer accounts, so they appear in the Sales rep list. Viewers are always in the list."><input id="umRep" type="checkbox"> Sales rep</label></div>
       <div class="field"><button class="primary" id="umAdd" type="button" style="padding:13px 20px">Add user</button></div>
     </div>
-    <div class="hint">Username: letters, numbers, dots, dashes or underscores (3 to 40). Passwords are shown so you can pass them on.</div>
+    <div class="hint">Username: letters, numbers, dots, dashes or underscores (3 to 40). Passwords are shown so you can pass them on. Tick <strong>Sales rep</strong> for anyone who looks after customer accounts but is not a Viewer. Viewers are always in the Sales rep list.</div>
     <div class="err-text" id="umErr" role="status"></div>
     <div class="info-box" id="umResult" hidden></div>
-    <div class="card-label" style="margin-top:6px">Users <span class="req-note" id="umCount"></span></div>
+  </section>
+  <section class="card">
+    <div class="card-label">Users <span class="req-note" id="umCount"></span></div>
     <div class="um-wrap"><table class="um">
-      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Last sign-in</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Sales rep</th><th>Last sign-in</th><th></th></tr></thead>
       <tbody id="umRows"></tbody>
     </table></div>
+  </section>
   </div>
 </div>
 
@@ -544,7 +562,11 @@
     try {
       const account = RULES.account($('nAccount').value);
       const accountName = RULES.accountName($('nAccountName').value);
-      const assignedTo = RULES.assignedTo($('nRep').value);
+      // Sales rep is mandatory: the person must pick a rep, or deliberately pick "Not assigned"
+      const repVal = $('nRep').value;
+      if (repsFailed) throw new Error('The sales rep list did not load, so the back order cannot be submitted. Refresh the page and try again.');
+      if (!repVal) throw new Error('Select a sales rep, or choose "Not assigned" if this customer has none.');
+      const assignedTo = repVal === '__none' ? null : RULES.assignedTo(repVal);
       const orderRef = RULES.orderRef($('nRef').value);
       const notes = RULES.orderNotes($('nNotes').value);
       const lines = [...$('newLines').children].map((r, i) => {
@@ -761,16 +783,19 @@
   const lineSort = (a, b) => (a.line_no - b.line_no) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id));
 
   const repName = (id) => (id && !isViewer() ? ((reps.find((r) => r.id === id) || {}).display_name || 'Unknown') : '');
+  // repsFailed blocks submitting a back order while the rep list is unavailable (the field is mandatory)
+  let repsFailed = false;
   async function loadReps() {
-    if (!profile || isViewer()) { reps = []; return; }
+    if (!profile || isViewer()) { reps = []; repsFailed = false; return; }
     const keep = $('nRep').value;
     const { data, error } = await sb.rpc('list_sales_reps');
-    if (error) toast('Could not load the sales rep list: ' + fail(error).message, true);
-    reps = data || [];
+    if (error) { repsFailed = true; toast('Could not load the sales rep list: ' + fail(error).message, true); }
+    else { repsFailed = false; reps = data || []; }
     const sel = $('nRep'); sel.textContent = '';
-    sel.append(el('option', { value: '', textContent: 'Not assigned' }));
+    sel.append(el('option', { value: '', textContent: 'Select sales rep…' }));
     reps.forEach((r) => sel.append(el('option', { value: r.id, textContent: r.display_name })));
-    sel.value = reps.some((r) => r.id === keep) ? keep : '';
+    sel.append(el('option', { value: '__none', textContent: 'Not assigned' }));       // always last
+    sel.value = (keep === '__none' || reps.some((r) => r.id === keep)) ? keep : '';
     render();
   }
 
@@ -834,9 +859,10 @@
         tr.append(cell(o.created_by, 'nowrap'));
         if (!isViewer()) {
           if (edit) {
-            const opts = [el('option', { value: '', textContent: 'Not assigned', selected: !o.assigned_to })];
+            const opts = [];
             if (o.assigned_to && !reps.some((r) => r.id === o.assigned_to)) opts.push(el('option', { value: o.assigned_to, textContent: repName(o.assigned_to), selected: true }));
             reps.forEach((r) => opts.push(el('option', { value: r.id, textContent: r.display_name, selected: r.id === o.assigned_to })));
+            opts.push(el('option', { value: '', textContent: 'Not assigned', selected: !o.assigned_to }));       // always last
             tr.append(el('td', {}, el('select', { style: 'min-width:150px', title: 'Sales rep (applies to every line of the order)', onchange: (e) => patchOrder(o.id, 'assignedTo', e.target.value) }, opts)));
           } else tr.append(cell(repName(o.assigned_to)));
         }
@@ -1064,10 +1090,11 @@
     b.append(...nodes); b.hidden = false;
   };
 
-  function closeUsers() { const wasOpen = $('usersModal').classList.contains('open'); $('usersModal').classList.remove('open'); if (wasOpen && profile) loadReps(); umShowErr(''); umShowResult(null); umUsers = []; $('umRows').textContent = ''; }
+  // The Users screen is a full-screen page over the app. While it is open the page behind it must not scroll.
+  function closeUsers() { const wasOpen = $('usersModal').classList.contains('open'); $('usersModal').classList.remove('open'); document.body.style.overflow = ''; if (wasOpen && profile) loadReps(); umShowErr(''); umShowResult(null); umUsers = []; $('umRows').textContent = ''; }
   async function openUsers() {
     if (!editing || !isEditor()) return;
-    $('usersModal').classList.add('open'); umShowErr(''); umShowResult(null);
+    $('usersModal').classList.add('open'); document.body.style.overflow = 'hidden'; $('usersModal').scrollTop = 0; umShowErr(''); umShowResult(null);
     await loadUsers();
   }
   async function loadUsers() {
@@ -1092,7 +1119,15 @@
           ['submitter', 'viewer', 'editor'].map((r) => el('option', { value: r, textContent: ROLE_LABEL[r], selected: r === u.role })));
         roleTd.append(sel);
       }
-      tr.append(roleTd, el('td', { textContent: u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : 'Never', className: 'muted' }));
+      // Viewers are always in the Sales rep list; everyone else is in it only if this box is ticked
+      const repTd = el('td', { className: 'um-rep' });
+      if (u.role === 'viewer') repTd.textContent = 'Yes (Viewer)';
+      else if (u.role) {
+        const cb = el('input', { type: 'checkbox', checked: !!u.is_sales_rep, title: 'Show ' + (u.display_name || uname) + ' in the Sales rep list', onchange: (e) => setSalesRep(u, e.target.checked) });
+        cb.setAttribute('aria-label', 'Sales rep: ' + (u.display_name || uname));
+        repTd.append(cb);
+      }
+      tr.append(roleTd, repTd, el('td', { textContent: u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : 'Never', className: 'muted' }));
       const act = el('td'); const box = el('div', { className: 'um-actions' });
       box.append(el('button', { className: 'secondary', textContent: 'Reset password', onclick: () => resetUserPassword(u) }));
       if (!isMe) box.append(el('button', { className: 'danger', textContent: 'Delete', onclick: () => deleteUser(u) }));
@@ -1113,9 +1148,9 @@
       if (!USERNAME_RE.test(uname)) throw new Error('Username must be 3 to 40 characters: letters, numbers, dots, dashes or underscores, starting and ending with a letter or number');
       if (pw.length < 6) throw new Error('Password must be at least 6 characters');
       umBusy = true; $('umAdd').disabled = true;
-      await callUsers('create', { email: toLoginEmail(uname), password: pw, display_name: name, role: $('umRole').value });
+      await callUsers('create', { email: toLoginEmail(uname), password: pw, display_name: name, role: $('umRole').value, is_sales_rep: $('umRep').checked });
       umShowResult(credBox(name + ' added. Username / password:', uname, pw));
-      ['umName', 'umUser', 'umPass'].forEach((id) => ($(id).value = '')); $('umRole').value = 'submitter';
+      ['umName', 'umUser', 'umPass'].forEach((id) => ($(id).value = '')); $('umRole').value = 'submitter'; $('umRep').checked = false;
       await loadUsers();
     } catch (e) { umShowErr(e.message); }
     umBusy = false; $('umAdd').disabled = false;
@@ -1123,6 +1158,13 @@
   async function setUserRole(u, role) {
     umShowErr(''); umShowResult(null);
     try { await callUsers('set_role', { id: u.id, role }); toast(( u.display_name || toUsername(u.email)) + ' is now ' + ROLE_LABEL[role]); }
+    catch (e) { umShowErr(e.message); }
+    await loadUsers();
+  }
+  async function setSalesRep(u, value) {
+    umShowErr(''); umShowResult(null);
+    const nm = u.display_name || toUsername(u.email);
+    try { await callUsers('set_sales_rep', { id: u.id, value: !!value }); toast(nm + (value ? ' is now in the Sales rep list' : ' removed from the Sales rep list')); }
     catch (e) { umShowErr(e.message); }
     await loadUsers();
   }
@@ -1148,7 +1190,6 @@
   $('umClose').onclick = closeUsers;
   $('umAdd').onclick = addUser;
   $('umGen').onclick = () => { $('umPass').value = genPassword(); };
-  $('usersModal').addEventListener('click', (e) => { if (e.target === $('usersModal')) closeUsers(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeUsers(); });
 
   // ---------- Wire up ----------

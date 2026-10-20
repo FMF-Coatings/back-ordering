@@ -683,8 +683,8 @@
     }
   }
 
-  // ---------- Manager auto-refresh ----------
-  // Managers get the lines refreshed every 5 minutes. Not while in edit view; not while the tab is hidden.
+  // ---------- Auto-refresh (all roles) ----------
+  // Everyone gets the lines refreshed every 5 minutes. Not while in edit view; not while the tab is hidden.
   // This never touches the idle-logout timer: only real mouse/key/touch events do.
   const AUTO_REFRESH_MS = 5 * 60 * 1000;
   let nextRefreshAt = Date.now() + AUTO_REFRESH_MS, refreshBusy = false, wasEditing = false;
@@ -695,7 +695,7 @@
   }
   function refreshTick() {
     const box = $('refreshBox');
-    const on = !!profile && isEditor();
+    const on = !!profile;
     box.hidden = !on;
     if (!on) { wasEditing = false; return; }
     const txt = $('refreshText');
@@ -720,10 +720,10 @@
   }
   setInterval(refreshTick, 1000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && profile && isEditor() && !editing) autoRefresh();   // catch up on return
+    if (document.visibilityState === 'visible' && profile && !editing) autoRefresh();   // catch up on return
     else refreshTick();
   });
-  $('refreshBtn').onclick = () => { if (isEditor() && !editing) autoRefresh(); };
+  $('refreshBtn').onclick = () => { if (profile && !editing) autoRefresh(); };
   // Sort by the Raised date. Newest first by default; click the header to flip. The database does the sorting
   // (not the browser) so that, with more than 500 back orders, "oldest first" really starts at the oldest.
   let sortDir = 'desc';
